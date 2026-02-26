@@ -348,108 +348,137 @@ export async function POST() {
     });
 
     // 15. Seed production entries for last 30 days
+    // Need a work_order_id — use the first inserted work order if available
     if (insertedLines && insertedLines.length > 0) {
-      const productionEntries = [];
-      const now = new Date();
-      for (let day = 30; day >= 1; day--) {
-        const date = new Date(now.getTime() - day * 24 * 3600 * 1000);
-        const dateStr = date.toISOString().split("T")[0];
-        for (const line of insertedLines.slice(0, 5)) {
-          const targetQty = line.target_per_hour * 8;
-          const efficiency = 0.70 + Math.random() * 0.25;
-          const produced = Math.floor(targetQty * efficiency);
-          const defects = Math.floor(produced * (0.01 + Math.random() * 0.03));
-          productionEntries.push({
-            company_id: DEMO_COMPANY_ID,
-            production_line_id: line.id,
-            production_line_name: line.name,
-            date: dateStr,
-            shift: "morning",
-            target_quantity: targetQty,
-            produced_quantity: produced,
-            defect_quantity: defects,
-            operator_count: line.total_operators,
-            efficiency_pct: Math.round(efficiency * 100),
-            working_minutes: 480,
-          });
+      // Fetch work orders we just created
+      const { data: fetchedWOs } = await supabaseAdmin
+        .from("work_orders")
+        .select("id, order_id")
+        .eq("company_id", DEMO_COMPANY_ID)
+        .limit(10);
+
+      if (fetchedWOs && fetchedWOs.length > 0) {
+        const productionEntries = [];
+        const now = new Date();
+        for (let day = 30; day >= 1; day--) {
+          const dateStr = new Date(now.getTime() - day * 24 * 3600 * 1000)
+            .toISOString()
+            .split("T")[0];
+          for (let li = 0; li < Math.min(5, insertedLines.length); li++) {
+            const line = insertedLines[li];
+            const wo = fetchedWOs[li % fetchedWOs.length];
+            const targetQty = line.target_per_hour * 8;
+            const efficiency = 0.70 + Math.random() * 0.25;
+            const produced = Math.floor(targetQty * efficiency);
+            const defects = Math.floor(produced * (0.01 + Math.random() * 0.03));
+            productionEntries.push({
+              company_id: DEMO_COMPANY_ID,
+              work_order_id: wo.id,
+              order_id: wo.order_id,
+              entry_date: dateStr,
+              shift: "morning",
+              production_line: line.name,
+              target_quantity: targetQty,
+              produced_quantity: produced,
+              defective_quantity: defects,
+              operators_present: line.total_operators,
+              efficiency_percent: Math.round(efficiency * 100),
+              working_minutes: 480,
+              entered_by: userProfiles[0].id,
+            });
+          }
+        }
+        // Insert in batches (no unique constraint on these cols, use insert)
+        for (let i = 0; i < productionEntries.length; i += 50) {
+          await supabaseAdmin
+            .from("production_entries")
+            .insert(productionEntries.slice(i, i + 50));
         }
       }
-      await supabaseAdmin
-        .from("production_entries")
-        .upsert(productionEntries, { onConflict: "company_id,production_line_id,date,shift" });
     }
 
     // 16. Quality inspections (mix of pass/fail)
     if (insertedOrders && insertedOrders.length > 0 && userProfiles.length > 0) {
+      const inspectorId = userProfiles[userProfiles.length > 3 ? 3 : 0].id;
       const inspections = [];
       const types = ["inline", "endline", "pre_final", "final"];
       for (let i = 0; i < 12; i++) {
         const order = insertedOrders[i % insertedOrders.length];
-        const inspectedQty = Math.floor(200 + Math.random() * 800);
-        const passRate = 0.88 + Math.random() * 0.12;
-        const passedQty = Math.floor(inspectedQty * passRate);
+        const lotSize = Math.floor(500 + Math.random() * 1500);
+        const sampleSize = Math.floor(lotSize * 0.1);
+        const totalDefects = Math.floor(sampleSize * (0.02 + Math.random() * 0.1));
+        const majorDefects = Math.floor(totalDefects * 0.6);
+        const minorDefects = totalDefects - majorDefects;
+        const passRate = 1 - totalDefects / sampleSize;
         inspections.push({
           company_id: DEMO_COMPANY_ID,
           inspection_number: `QC-2026-${String(70 + i).padStart(4, "0")}`,
           order_id: order.id,
           inspection_type: types[i % types.length],
           inspection_date: new Date(Date.now() - i * 2 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          inspected_quantity: inspectedQty,
-          passed_quantity: passedQty,
-          failed_quantity: inspectedQty - passedQty,
-          defect_rate_pct: parseFloat(((1 - passRate) * 100).toFixed(2)),
-          result: passRate >= 0.95 ? "pass" : passRate >= 0.88 ? "conditional_pass" : "fail",
-          aql_level: "2.5",
-          inspected_by: userProfiles[userProfiles.length > 3 ? 3 : 0].id,
+          lot_size: lotSize,
+          sample_size: sampleSize,
+          pieces_checked: sampleSize,
+          total_defects: totalDefects,
+          major_defects: majorDefects,
+          minor_defects: minorDefects,
+          critical_defects: 0,
+          aql_level: "AQL 2.5",
+          result: passRate >= 0.97 ? "pass" : passRate >= 0.92 ? "conditional_pass" : "fail",
+          inspector_id: inspectorId,
+          created_by: inspectorId,
         });
       }
       await supabaseAdmin
-        .from("quality_inspections")
+        .from("inspections")
         .upsert(inspections, { onConflict: "company_id,inspection_number" });
     }
 
     // 17. Dyeing batches
-    if (insertedFabrics && insertedFabrics.length > 0 && userProfiles.length > 0) {
+    if (insertedOrders && insertedOrders.length > 0 && userProfiles.length > 0) {
+      // Fetch inserted colors for reference
+      const { data: fetchedColors } = await supabaseAdmin
+        .from("colors")
+        .select("id, name")
+        .eq("company_id", DEMO_COMPANY_ID)
+        .limit(10);
+
       const dyeingBatches = [
         {
           company_id: DEMO_COMPANY_ID,
           batch_number: "DYE-2026-0031",
-          fabric_id: insertedFabrics[0]?.id || null,
-          fabric_name: "Cotton Jersey 180 GSM",
+          order_id: insertedOrders[0]?.id || null,
+          color_id: fetchedColors?.find((c) => c.name === "Navy Blue")?.id || null,
           color_name: "Navy Blue",
-          pantone_ref: "19-4052 TCX",
-          batch_weight_kg: 500,
+          input_quantity_kg: 500,
+          output_quantity_kg: 490,
+          process_loss_percent: 2.0,
+          shade_result: "approved",
           status: "completed",
-          machine_no: "DYE-M01",
-          started_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
-          completed_at: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(),
-          result: "pass",
+          start_date: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          end_date: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString().split("T")[0],
           created_by: userProfiles[0].id,
         },
         {
           company_id: DEMO_COMPANY_ID,
           batch_number: "DYE-2026-0032",
-          fabric_id: insertedFabrics[1]?.id || null,
-          fabric_name: "Cotton Pique 220 GSM",
+          order_id: insertedOrders[1]?.id || null,
+          color_id: fetchedColors?.find((c) => c.name === "Red")?.id || null,
           color_name: "Red",
-          pantone_ref: "18-1763 TCX",
-          batch_weight_kg: 350,
-          status: "in_progress",
-          machine_no: "DYE-M02",
-          started_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+          input_quantity_kg: 350,
+          status: "in_process",
+          start_date: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString().split("T")[0],
           created_by: userProfiles[0].id,
         },
         {
           company_id: DEMO_COMPANY_ID,
           batch_number: "DYE-2026-0033",
-          fabric_id: insertedFabrics[0]?.id || null,
-          fabric_name: "Cotton Jersey 180 GSM",
+          order_id: insertedOrders[2]?.id || null,
+          color_id: fetchedColors?.find((c) => c.name === "Olive Green")?.id || null,
           color_name: "Olive Green",
-          pantone_ref: "18-0527 TCX",
-          batch_weight_kg: 420,
-          status: "scheduled",
-          machine_no: "DYE-M01",
-          started_at: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+          input_quantity_kg: 420,
+          status: "planned",
+          start_date: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().split("T")[0],
           created_by: userProfiles[0].id,
         },
       ];
@@ -460,44 +489,47 @@ export async function POST() {
 
     // 18. Shipments
     if (insertedOrders && insertedOrders.length > 0) {
+      const readyOrder = insertedOrders.find((o) => o.status === "ready_to_ship");
+      const inProdOrder = insertedOrders.find((o) => o.status === "in_production");
       const shipments = [
         {
           company_id: DEMO_COMPANY_ID,
           shipment_number: "SH-2026-0008",
-          order_ids: [insertedOrders.find((o) => o.status === "ready_to_ship")?.id].filter(Boolean),
-          planned_date: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          status: "booking_confirmed",
+          order_ids: readyOrder ? [readyOrder.id] : [],
+          buyer_id: readyOrder?.buyer_id || insertedOrders[0].buyer_id,
+          planned_shipment_date: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          status: "packing",
           port_of_loading: "Tuticorin",
           port_of_discharge: "Hamburg",
-          shipping_line: "MSC",
           vessel_name: "MSC AURORA",
-          container_type: "20GP",
-          container_count: 1,
-          readiness_checklist: {
-            packing_complete: true,
-            quality_approved: true,
-            invoice_ready: false,
-            customs_cleared: false,
-            booking_confirmed: true,
-          },
+          container_type: "20ft",
+          total_cartons: 120,
+          total_pieces: 8000,
+          production_complete: true,
+          qc_passed: true,
+          packing_done: false,
+          documents_ready: false,
+          transport_arranged: false,
+          created_by: userProfiles[0].id,
         },
         {
           company_id: DEMO_COMPANY_ID,
           shipment_number: "SH-2026-0007",
-          order_ids: [insertedOrders.find((o) => o.status === "in_production")?.id].filter(Boolean),
-          planned_date: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          status: "pending",
+          order_ids: inProdOrder ? [inProdOrder.id] : [],
+          buyer_id: inProdOrder?.buyer_id || insertedOrders[0].buyer_id,
+          planned_shipment_date: new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          status: "packing",
           port_of_loading: "Chennai",
           port_of_discharge: "Barcelona",
-          container_type: "40HC",
-          container_count: 1,
-          readiness_checklist: {
-            packing_complete: false,
-            quality_approved: false,
-            invoice_ready: false,
-            customs_cleared: false,
-            booking_confirmed: false,
-          },
+          container_type: "40ft",
+          total_cartons: 0,
+          total_pieces: 0,
+          production_complete: false,
+          qc_passed: false,
+          packing_done: false,
+          documents_ready: false,
+          transport_arranged: false,
+          created_by: userProfiles[0].id,
         },
       ];
       await supabaseAdmin
@@ -506,21 +538,22 @@ export async function POST() {
     }
 
     // 19. TNA milestones
-    if (insertedOrders && insertedOrders.length > 0 && userProfiles.length > 0) {
+    if (insertedOrders && insertedOrders.length > 0) {
       const milestones = [];
       const milestoneTypes = [
-        { name: "PP Meeting", offsetDays: -45 },
-        { name: "Fabric Booking", offsetDays: -42 },
-        { name: "Fabric In-house", offsetDays: -30 },
-        { name: "Cutting Start", offsetDays: -25 },
-        { name: "Sewing Start", offsetDays: -20 },
-        { name: "Finishing Complete", offsetDays: -8 },
-        { name: "Final Inspection", offsetDays: -5 },
-        { name: "Ex-factory", offsetDays: 0 },
+        { name: "PP Meeting", offsetDays: -45, dept: "Merchandising" },
+        { name: "Fabric Booking", offsetDays: -42, dept: "Purchase" },
+        { name: "Fabric In-house", offsetDays: -30, dept: "Store" },
+        { name: "Cutting Start", offsetDays: -25, dept: "Cutting" },
+        { name: "Sewing Start", offsetDays: -20, dept: "Sewing" },
+        { name: "Finishing Complete", offsetDays: -8, dept: "Finishing" },
+        { name: "Final Inspection", offsetDays: -5, dept: "Quality" },
+        { name: "Ex-factory", offsetDays: 0, dept: "Shipping" },
       ];
       for (const order of insertedOrders.slice(0, 3)) {
         const shipDate = new Date(order.delivery_date);
-        for (const ms of milestoneTypes) {
+        for (let si = 0; si < milestoneTypes.length; si++) {
+          const ms = milestoneTypes[si];
           const plannedDate = new Date(shipDate.getTime() + ms.offsetDays * 24 * 3600 * 1000);
           const isPast = plannedDate < new Date();
           milestones.push({
@@ -530,45 +563,49 @@ export async function POST() {
             planned_date: plannedDate.toISOString().split("T")[0],
             actual_date: isPast && Math.random() > 0.2 ? plannedDate.toISOString().split("T")[0] : null,
             status: isPast ? "completed" : "pending",
-            responsible_person: userProfiles[2]?.id || userProfiles[0].id,
+            responsible_department: ms.dept,
+            sort_order: si,
           });
         }
       }
-      await supabaseAdmin.from("tna_milestones").upsert(milestones, {
-        onConflict: "company_id,order_id,milestone_name",
-      });
+      await supabaseAdmin.from("tna_milestones").insert(milestones);
     }
 
     // 20. Lab dips and samples
-    if (insertedOrders && insertedOrders.length > 0 && userProfiles.length > 0) {
+    if (insertedOrders && insertedBuyers && insertedOrders.length > 0 && userProfiles.length > 0) {
+      const creatorId = userProfiles[2]?.id || userProfiles[0].id;
       const labDips = [];
       const samples = [];
-      for (const order of insertedOrders.slice(0, 3)) {
+      for (let oi = 0; oi < Math.min(3, insertedOrders.length); oi++) {
+        const order = insertedOrders[oi];
+        const buyer = insertedBuyers[oi % insertedBuyers.length];
         labDips.push({
           company_id: DEMO_COMPANY_ID,
-          ld_number: `LD-2026-${String(25 + labDips.length + 1).padStart(4, "0")}`,
+          lab_dip_number: `LD-2026-${String(25 + oi + 1).padStart(4, "0")}`,
           order_id: order.id,
+          buyer_id: buyer.id,
           color_name: "Navy Blue",
-          pantone_ref: "19-4052 TCX",
           status: "approved",
-          submitted_date: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          approved_date: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          created_by: userProfiles[2]?.id || userProfiles[0].id,
+          submission_date: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          approval_date: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          created_by: creatorId,
         });
         samples.push({
           company_id: DEMO_COMPANY_ID,
-          sample_number: `SA-2026-${String(40 + samples.length + 1).padStart(4, "0")}`,
+          sample_number: `SA-2026-${String(40 + oi + 1).padStart(4, "0")}`,
           order_id: order.id,
+          buyer_id: buyer.id,
           sample_type: "pre_production",
           status: "approved",
-          submission_date: new Date(Date.now() - 18 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          approval_date: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString().split("T")[0],
-          created_by: userProfiles[2]?.id || userProfiles[0].id,
+          submitted_date: new Date(Date.now() - 18 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          approved_date: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString().split("T")[0],
+          quantity: 3,
+          created_by: creatorId,
         });
       }
       await supabaseAdmin
         .from("lab_dips")
-        .upsert(labDips, { onConflict: "company_id,ld_number" });
+        .upsert(labDips, { onConflict: "company_id,lab_dip_number" });
       await supabaseAdmin
         .from("samples")
         .upsert(samples, { onConflict: "company_id,sample_number" });
