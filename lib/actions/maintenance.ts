@@ -136,10 +136,8 @@ export async function schedulePM(data: PMScheduleData) {
   // Update machine's next service due
   const { error: updateError } = await supabase
     .from("machines")
-    .update({
-      next_service_due: data.scheduled_date,
-      updated_at: new Date().toISOString(),
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ next_service_due: data.scheduled_date } as any)
     .eq("id", data.machine_id);
 
   if (updateError) {
@@ -177,11 +175,8 @@ export async function closeMaintenance(
   // Update machine status back to running and record last service date
   const { error: updateError } = await supabase
     .from("machines")
-    .update({
-      status: "running",
-      last_serviced_at: new Date().toISOString().split("T")[0],
-      updated_at: new Date().toISOString(),
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: "running", last_serviced_at: new Date().toISOString().split("T")[0] } as any)
     .eq("id", machineId);
 
   if (updateError) {
