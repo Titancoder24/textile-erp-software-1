@@ -291,9 +291,8 @@ export default function COPQPage() {
                     fontSize: "12px",
                     padding: "8px 12px",
                   }}
-                  formatter={(value: number | undefined, name: string) => [
+                  formatter={(value: number | undefined) => [
                     formatINRFull(value ?? 0),
-                    name === "copq" ? "COPQ" : "Target",
                   ]}
                 />
                 <Legend

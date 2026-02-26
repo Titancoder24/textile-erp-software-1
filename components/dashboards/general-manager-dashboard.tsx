@@ -228,7 +228,7 @@ export function GeneralManagerDashboard(_props: GeneralManagerDashboardProps) {
                   </Pie>
                   <Tooltip
                     contentStyle={{ fontSize: "11px", borderRadius: "6px" }}
-                    formatter={(v: number | undefined, _: string, props: { payload?: { label?: string } }) => [v ?? 0, props.payload?.label ?? ""]}
+                    formatter={(v: number | undefined) => [v ?? 0]}
                   />
                   <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                     <tspan style={{ fontSize: 16, fontWeight: 700, fill: "#111827" }}>38</tspan>
@@ -273,7 +273,7 @@ export function GeneralManagerDashboard(_props: GeneralManagerDashboardProps) {
                 <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 100000).toFixed(0)}L`} />
                 <Tooltip
                   contentStyle={{ fontSize: "11px", borderRadius: "8px", border: "1px solid #e5e7eb" }}
-                  formatter={(v: number | undefined, name: string) => [formatINRFull(v ?? 0), name === "revenue" ? "Revenue" : "Expenses"]}
+                  formatter={(v: number | undefined) => [formatINRFull(v ?? 0)]}
                 />
                 <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: "10px" }} />
                 <Bar dataKey="revenue" fill="#2563eb" radius={[3, 3, 0, 0]} maxBarSize={24} name="revenue" />
