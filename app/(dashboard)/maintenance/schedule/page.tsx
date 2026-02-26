@@ -669,7 +669,8 @@ export default function PMSchedulePage() {
                 <YAxis tick={{ fontSize: 12 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-                  formatter={(val: number, name: string) => [
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(val: number, name: string): any => [
                     name === "pct" ? `${val}%` : val,
                     name === "pct" ? "Compliance" : name === "planned" ? "Planned" : "Completed",
                   ]}

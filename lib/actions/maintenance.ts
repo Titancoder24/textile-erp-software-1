@@ -95,10 +95,9 @@ export async function logBreakdown(data: BreakdownLogData) {
   }
 
   // Update machine status to breakdown
-  const { error: updateError } = await supabase
-    .from("machines")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "breakdown" } as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updateError } = await (supabase.from("machines") as any)
+    .update({ status: "breakdown" })
     .eq("id", data.machine_id);
 
   if (updateError) {
@@ -134,10 +133,9 @@ export async function schedulePM(data: PMScheduleData) {
   }
 
   // Update machine's next service due
-  const { error: updateError } = await supabase
-    .from("machines")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ next_service_due: data.scheduled_date } as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updateError } = await (supabase.from("machines") as any)
+    .update({ next_service_due: data.scheduled_date })
     .eq("id", data.machine_id);
 
   if (updateError) {
@@ -173,10 +171,12 @@ export async function closeMaintenance(
   }
 
   // Update machine status back to running and record last service date
-  const { error: updateError } = await supabase
-    .from("machines")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "running", last_serviced_at: new Date().toISOString().split("T")[0] } as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updateError } = await (supabase.from("machines") as any)
+    .update({
+      status: "running",
+      last_serviced_at: new Date().toISOString().split("T")[0],
+    })
     .eq("id", machineId);
 
   if (updateError) {
@@ -236,24 +236,27 @@ export async function getMaintenanceStats(companyId: string) {
     return { data: null, error: "Company ID is required" };
   }
 
-  const { data: machines, error } = await supabase
+  const { data: machinesRaw, error } = await supabase
     .from("machines")
-    .select("id, status, department")
+    .select("id, status, department, company_id")
     .eq("company_id", companyId);
 
   if (error) {
     return { data: null, error: error.message };
   }
 
-  const total = (machines ?? []).length;
-  const running = (machines ?? []).filter((m) => m.status === "running").length;
-  const underMaintenance = (machines ?? []).filter(
+  // Cast to known shape since Supabase partial select inference limits typing
+  const machines = (machinesRaw ?? []) as Array<{ id: string; status: string; department: string; company_id: string }>;
+
+  const total = machines.length;
+  const running = machines.filter((m) => m.status === "running").length;
+  const underMaintenance = machines.filter(
     (m) => m.status === "under_maintenance"
   ).length;
-  const breakdown = (machines ?? []).filter(
+  const breakdown = machines.filter(
     (m) => m.status === "breakdown"
   ).length;
-  const idle = (machines ?? []).filter((m) => m.status === "idle").length;
+  const idle = machines.filter((m) => m.status === "idle").length;
 
   // OEE calculation (mock values — in production derived from production data)
   const availability = total > 0 ? Math.round((running / total) * 100) : 0;

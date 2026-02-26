@@ -566,7 +566,7 @@ export default function AttendancePage() {
                     borderRadius: 8,
                     border: "1px solid #e5e7eb",
                   }}
-                  formatter={(val: number) => [val, "Present"]}
+                  formatter={(val: number) => [val, "Present"] as [number, string]}
                 />
                 <Bar dataKey="present" radius={[4, 4, 0, 0]}>
                   {DAILY_ATTENDANCE_TREND.map((entry, index) => (
