@@ -230,9 +230,8 @@ interface DataEntryOperatorDashboardProps {
 }
 
 export function DataEntryOperatorDashboard({
-  _props,
   operatorName = "Deepak Sharma",
-}: DataEntryOperatorDashboardProps & { _props?: unknown }) {
+}: DataEntryOperatorDashboardProps) {
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
     year: "numeric",

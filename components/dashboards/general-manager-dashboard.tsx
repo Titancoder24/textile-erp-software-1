@@ -91,13 +91,6 @@ const HOT_TOPICS = [
 
 /* ---------- Helpers ---------- */
 
-function formatINRShort(v: number) {
-  if (v >= 10000000) return `\u20B9${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `\u20B9${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `\u20B9${(v / 1000).toFixed(0)}K`;
-  return `\u20B9${v}`;
-}
-
 function formatINRFull(v: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",

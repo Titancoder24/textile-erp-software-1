@@ -107,7 +107,7 @@ export async function checkDeliveryFeasibility(
   return { data: null, error: "Feasibility check requires live production data" };
 }
 
-export async function getCapacityForecast(companyId: string, weeks: number = 8) {
+export async function getCapacityForecast(companyId: string, _weeks: number = 8) {
   if (!companyId) {
     return { data: null, error: "Company ID is required" };
   }
