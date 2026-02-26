@@ -3,12 +3,24 @@
 
 export const DEMO_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
 
+// ============================================================
+// DEMO USERS — all 14 internal roles + 3 portal roles
+// ============================================================
+
 export const DEMO_USERS = [
+  // ── Internal roles ──────────────────────────────────────
   {
     email: "owner@demo.textile-os.com",
     password: "Demo@2026",
     full_name: "Rajesh Mehta",
     role: "factory_owner",
+    department: "Management",
+  },
+  {
+    email: "gm@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Anil Kapoor",
+    role: "general_manager",
     department: "Management",
   },
   {
@@ -19,18 +31,18 @@ export const DEMO_USERS = [
     department: "Production",
   },
   {
+    email: "supervisor@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Ramesh Yadav",
+    role: "sewing_supervisor",
+    department: "Sewing",
+  },
+  {
     email: "merchandiser@demo.textile-os.com",
     password: "Demo@2026",
     full_name: "Priya Sharma",
     role: "merchandiser",
     department: "Merchandising",
-  },
-  {
-    email: "quality@demo.textile-os.com",
-    password: "Demo@2026",
-    full_name: "Amit Patel",
-    role: "quality_manager",
-    department: "Quality",
   },
   {
     email: "purchase@demo.textile-os.com",
@@ -47,6 +59,13 @@ export const DEMO_USERS = [
     department: "Store",
   },
   {
+    email: "quality@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Amit Patel",
+    role: "quality_manager",
+    department: "Quality",
+  },
+  {
     email: "dyeing@demo.textile-os.com",
     password: "Demo@2026",
     full_name: "Ravi Desai",
@@ -59,6 +78,49 @@ export const DEMO_USERS = [
     full_name: "Neha Gupta",
     role: "finance_manager",
     department: "Accounts",
+  },
+  {
+    email: "hr@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Sunita Verma",
+    role: "hr_manager",
+    department: "HR",
+  },
+  {
+    email: "maintenance@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Manoj Tiwari",
+    role: "maintenance_engineer",
+    department: "Maintenance",
+  },
+  {
+    email: "dataentry@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Kavita Rao",
+    role: "data_entry_operator",
+    department: "Production",
+  },
+  // ── Portal roles ─────────────────────────────────────────
+  {
+    email: "buyer@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Anna Lindqvist",
+    role: "buyer_user",
+    department: "External",
+  },
+  {
+    email: "vendor@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Arun Goyal",
+    role: "vendor_user",
+    department: "External",
+  },
+  {
+    email: "buyinghouse@demo.textile-os.com",
+    password: "Demo@2026",
+    full_name: "Michael Chen",
+    role: "buying_house_user",
+    department: "External",
   },
 ];
 
@@ -320,4 +382,5 @@ export const DEMO_NUMBER_SERIES = [
   { document_type: "capa", prefix: "CA" },
   { document_type: "dyeing_batch", prefix: "DB" },
   { document_type: "material_request", prefix: "MR" },
+  { document_type: "bom", prefix: "BOM" },
 ];

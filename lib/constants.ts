@@ -165,22 +165,61 @@ export const PO_STATUSES = [
   "cancelled",
 ] as const;
 
-export const DEMO_ROLES_DESCRIPTIONS: Record<string, string> = {
-  factory_owner: "Full access to all modules and reports",
-  production_manager: "Production planning, floor tracking, work orders",
-  merchandiser: "Orders, samples, lab dips, TNA, buyer communication",
-  purchase_manager: "Purchase orders, suppliers, GRN oversight",
-  store_manager: "Inventory, warehouses, material issue",
-  quality_manager: "All inspections, defect analysis, CAPA",
-  dyeing_master: "Recipes, lab dips, dyeing batches",
-  sewing_supervisor: "Line production, hourly output",
-  finance_manager: "Costing, P&L, payments",
-  hr_manager: "Employees, attendance, skills",
-  data_entry_operator: "Production data entry",
-  buyer_user: "Order tracking, approvals, shipments (Portal)",
-  vendor_user: "Purchase orders, payments, quality feedback (Portal)",
-  buying_house_user: "Multi-factory order monitoring (Portal)",
+export const SHIPMENT_STATUSES = [
+  "packing",
+  "ready",
+  "in_transit",
+  "delivered",
+  "delayed",
+] as const;
+
+export const SHIPMENT_STATUS_LABELS: Record<string, string> = {
+  packing: "Packing",
+  ready: "Ready to Ship",
+  in_transit: "In Transit",
+  delivered: "Delivered",
+  delayed: "Delayed",
 };
+
+export const MAINTENANCE_PRIORITIES = ["P1", "P2", "P3"] as const;
+
+export const MAINTENANCE_STATUS_LABELS: Record<string, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  resolved: "Resolved",
+  closed: "Closed",
+};
+
+export const SUPPLIER_TIERS: Record<string, string> = {
+  gold: "Gold",
+  silver: "Silver",
+  bronze: "Bronze",
+  probation: "Probation",
+};
+
+export const DEMO_ROLES_DESCRIPTIONS: Record<string, string> = {
+  super_admin: "Full system access, company setup, all modules",
+  factory_owner: "Executive overview — revenue, capacity, quality, orders, shipments",
+  general_manager: "Cross-functional dashboard — all KPIs, alerts, department scorecards",
+  production_manager: "Production planning, floor tracking, work orders, efficiency",
+  merchandiser: "Orders, samples, lab dips, TNA milestones, buyer communication",
+  purchase_manager: "Purchase orders, supplier management, GRN, MRP-driven indents",
+  store_manager: "Inventory levels, warehouse management, material issue, reorder alerts",
+  quality_manager: "All inspections, defect analysis, CAPA, COPQ, AQL tracking",
+  dyeing_master: "Dyeing recipes, lab dips, batch management, chemical usage",
+  sewing_supervisor: "Line-level production tracking, hourly output, operator attendance",
+  finance_manager: "Cost sheets, P&L, style profitability, outstanding payments",
+  hr_manager: "Employee master, attendance, payroll processing, wage sheets",
+  maintenance_engineer: "Machine health, breakdown log, PM schedule, OEE tracking",
+  data_entry_operator: "Production data entry, cutting entries, assigned work orders",
+  buyer_user: "Order tracking, sample approvals, shipment docs (Buyer Portal)",
+  vendor_user: "Purchase orders, GRN status, payment tracking (Vendor Portal)",
+  buying_house_user: "Multi-factory order monitoring, QC reports (Buying House Portal)",
+};
+
+// ============================================================
+// NAVIGATION - all modules including 10 new additions
+// ============================================================
 
 export const NAV_ITEMS = [
   {
@@ -275,6 +314,7 @@ export const NAV_ITEMS = [
       ROLES.GENERAL_MANAGER,
       ROLES.PRODUCTION_MANAGER,
       ROLES.PURCHASE_MANAGER,
+      ROLES.STORE_MANAGER,
     ],
   },
   {
@@ -313,6 +353,17 @@ export const NAV_ITEMS = [
     ],
   },
   {
+    title: "Capacity",
+    href: "/capacity",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+      ROLES.MERCHANDISER,
+    ],
+  },
+  {
     title: "Quality",
     href: "/quality",
     roles: [
@@ -343,6 +394,59 @@ export const NAV_ITEMS = [
       ROLES.GENERAL_MANAGER,
       ROLES.MERCHANDISER,
       ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Documents",
+    href: "/documents",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.MERCHANDISER,
+      ROLES.FINANCE_MANAGER,
+    ],
+  },
+  {
+    title: "Finance",
+    href: "/finance",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.FINANCE_MANAGER,
+    ],
+  },
+  {
+    title: "HR",
+    href: "/hr/attendance",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.HR_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Maintenance",
+    href: "/maintenance",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.MAINTENANCE_ENGINEER,
+      ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Supplier Scorecard",
+    href: "/purchase/scorecard",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PURCHASE_MANAGER,
     ],
   },
   {
