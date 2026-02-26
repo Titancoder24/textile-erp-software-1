@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm run lint)",
+      "Bash(npm run dev)",
+      "Bash(npm run test *)",
+      "Bash(npm install *)",
+      "Bash(npx *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cat package.json)",
+      "Bash(node *)",
+      "Bash(tsc *)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:*.npmjs.org)",
+      "WebFetch(domain:*.supabase.co)",
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:nextjs.org)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:tailwindcss.com)",
+      "Task(Explore)",
+      "Task(Plan)",
+      "Skill"
+    ],
+    "ask": [
+      "Bash(npm run db:*)",
+      "Bash(docker *)",
+      "Bash(git push *)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)"
+    ],
+    "deny": [
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(rm -rf /)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Edit(/etc/**)"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "tool_name:Edit",
+        "type": "command",
+        "command": "echo 'File edited successfully'",
+        "async": true
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "type": "command",
+        "command": "echo 'Session complete. Remember to commit your changes.'"
+      }
+    ]
+  },
+  "companyAnnouncements": [
+    "TextileOS ERP - Production-grade textile industry operating system",
+    "Stack: Next.js 16 + TypeScript + Tailwind CSS v4 + Supabase + shadcn/ui",
+    "All code must follow the patterns in CLAUDE.md and .claude/rules/",
+    "Database changes require running supabase/schema.sql in Supabase SQL Editor",
+    "Demo credentials: owner@demo.textile-os.com / Demo@2026"
+  ]
+}
