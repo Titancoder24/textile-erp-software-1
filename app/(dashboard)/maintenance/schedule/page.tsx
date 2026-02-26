@@ -44,7 +44,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -551,7 +550,6 @@ export default function PMSchedulePage() {
   const scheduledCount = MOCK_PM_TASKS.filter((t) => t.status === "scheduled").length;
 
   const latestCompliance = PM_COMPLIANCE_DATA[PM_COMPLIANCE_DATA.length - 1].pct;
-  const prevCompliance = PM_COMPLIANCE_DATA[PM_COMPLIANCE_DATA.length - 2].pct;
 
   const filteredTasks = MOCK_PM_TASKS.filter((task) => {
     if (filterStatus !== "all" && task.status !== filterStatus) return false;

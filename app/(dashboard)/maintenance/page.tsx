@@ -6,19 +6,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Pause,
-  Activity,
   Plus,
   CalendarClock,
   Filter,
-  ChevronRight,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -35,7 +31,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 // ---------------------------------------------------------------------------

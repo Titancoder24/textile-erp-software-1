@@ -279,9 +279,6 @@ function computeFactibilityResult(
 } {
   const today = new Date(2026, 1, 26); // Feb 26 2026
   const deliveryDate = new Date(deliveryDateStr);
-  const daysAvailable = Math.floor(
-    (deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
 
   const availableLines = MOCK_LINES.filter(
     (l) => l.department !== "Cutting" && l.department !== "Finishing"

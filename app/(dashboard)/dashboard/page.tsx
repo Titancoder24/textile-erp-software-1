@@ -11,6 +11,8 @@ import { DyeingMasterDashboard } from "@/components/dashboards/dyeing-master-das
 import { FinanceManagerDashboard } from "@/components/dashboards/finance-manager-dashboard";
 import { HRManagerDashboard } from "@/components/dashboards/hr-manager-dashboard";
 import { SewingSupervisorDashboard } from "@/components/dashboards/sewing-supervisor-dashboard";
+import { MaintenanceEngineerDashboard } from "@/components/dashboards/maintenance-engineer-dashboard";
+import { DataEntryOperatorDashboard } from "@/components/dashboards/data-entry-operator-dashboard";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -39,8 +41,10 @@ export default async function DashboardPage() {
       return <GeneralManagerDashboard />;
 
     case "production_manager":
-    case "data_entry_operator":
       return <ProductionManagerDashboard companyId={companyId} />;
+
+    case "data_entry_operator":
+      return <DataEntryOperatorDashboard />;
 
     case "sewing_supervisor":
       return <SewingSupervisorDashboard />;
@@ -67,7 +71,7 @@ export default async function DashboardPage() {
       return <HRManagerDashboard companyId={companyId} />;
 
     case "maintenance_engineer":
-      return <FactoryOwnerDashboard companyId={companyId} />;
+      return <MaintenanceEngineerDashboard />;
 
     default:
       return <FactoryOwnerDashboard companyId={companyId} />;

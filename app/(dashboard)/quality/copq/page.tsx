@@ -291,8 +291,8 @@ export default function COPQPage() {
                     fontSize: "12px",
                     padding: "8px 12px",
                   }}
-                  formatter={(value: number, name: string) => [
-                    formatINRFull(value),
+                  formatter={(value: number | undefined, name: string) => [
+                    formatINRFull(value ?? 0),
                     name === "copq" ? "COPQ" : "Target",
                   ]}
                 />
@@ -357,7 +357,7 @@ export default function COPQPage() {
                 </Pie>
                 <Tooltip
                   contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
-                  formatter={(v: number) => [`${v}%`, ""]}
+                  formatter={(v: number | undefined) => [`${v ?? 0}%`, ""]}
                 />
                 <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                   <tspan x="50%" dy="-6" style={{ fontSize: 18, fontWeight: 700, fill: "#111827" }}>
@@ -500,7 +500,7 @@ export default function COPQPage() {
                     fontSize: "12px",
                     padding: "8px 12px",
                   }}
-                  formatter={(v: number) => [formatINRFull(v), "COPQ"]}
+                  formatter={(v: number | undefined) => [formatINRFull(v ?? 0), "COPQ"]}
                 />
                 <Bar dataKey="copq" radius={[4, 4, 0, 0]} maxBarSize={48}>
                   {BUYER_COPQ.map((_, i) => (
@@ -554,7 +554,7 @@ export default function COPQPage() {
                     fontSize: "12px",
                     padding: "8px 12px",
                   }}
-                  formatter={(v: number) => [formatINRFull(v), "COPQ"]}
+                  formatter={(v: number | undefined) => [formatINRFull(v ?? 0), "COPQ"]}
                 />
                 <Bar dataKey="copq" radius={[0, 4, 4, 0]} maxBarSize={18}>
                   {STYLE_COPQ.map((_, i) => (

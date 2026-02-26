@@ -555,8 +555,8 @@ function BOMDetailSheet({
                   ))}
                 </Pie>
                 <RechartTooltip
-                  formatter={(value: number) =>
-                    `${formatCurrency(value, "INR")}`
+                  formatter={(value) =>
+                    [`${formatCurrency(Number(value), "INR")}`, "Cost"]
                   }
                 />
                 <Legend

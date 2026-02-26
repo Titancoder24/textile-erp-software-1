@@ -302,8 +302,8 @@ export function SewingSupervisorDashboard(_props: SewingSupervisorDashboardProps
                   <YAxis tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{ fontSize: "11px", borderRadius: "8px", border: "1px solid #e5e7eb" }}
-                    formatter={(v: number, name: string) => [
-                      v.toLocaleString("en-IN"),
+                    formatter={(v: number | undefined, name: string) => [
+                      (v ?? 0).toLocaleString("en-IN"),
                       name === "output" ? "Output" : "Target",
                     ]}
                   />

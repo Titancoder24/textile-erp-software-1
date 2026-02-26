@@ -45,8 +45,6 @@ interface PayrollData {
  * Inserts or upserts an attendance record for the given date.
  */
 export async function markAttendance(data: AttendanceRecord) {
-  const supabase = await createClient();
-
   if (!data.employee_id) {
     return { data: null, error: "Employee ID is required" };
   }

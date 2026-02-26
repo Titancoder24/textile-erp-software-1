@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -413,7 +412,7 @@ function BulkActionBar({
 export default function AttendancePage() {
   const [selectedDept, setSelectedDept] = React.useState("all");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [showMarkSheet, setShowMarkSheet] = React.useState(false);
+  const [_showMarkSheet, setShowMarkSheet] = React.useState(false);
 
   const totalEmployees = MOCK_DEPARTMENTS.reduce((s, d) => s + d.total, 0);
   const totalPresent = MOCK_DEPARTMENTS.reduce((s, d) => s + d.present, 0);
