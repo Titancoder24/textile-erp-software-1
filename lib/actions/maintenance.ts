@@ -97,7 +97,8 @@ export async function logBreakdown(data: BreakdownLogData) {
   // Update machine status to breakdown
   const { error: updateError } = await supabase
     .from("machines")
-    .update({ status: "breakdown", updated_at: new Date().toISOString() })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ status: "breakdown" } as any)
     .eq("id", data.machine_id);
 
   if (updateError) {
