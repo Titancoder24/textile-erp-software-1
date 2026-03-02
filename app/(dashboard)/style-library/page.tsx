@@ -3,584 +3,787 @@
 import * as React from "react";
 import {
   BookOpen,
+  Search,
+  Filter,
+  Layers,
+  Award,
+  TrendingUp,
+  FileText,
+  Plus,
+  Sparkles,
+  GraduationCap,
+  X,
+  ChevronRight,
+  Scissors,
   Gauge,
   ShieldCheck,
-  Layers,
-  Search,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
-import { toast } from "sonner";
-
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatNumber, formatDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn, formatNumber } from "@/lib/utils";
 import { useProfile } from "@/hooks/use-profile";
 import {
   getStyleLearningData,
   type StyleCard as StyleCardType,
 } from "@/lib/actions/analytics";
+import { toast } from "sonner";
 
-/* ---------- Helpers ---------- */
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const CATEGORY_CHIPS = [
+  "All",
+  "T-shirt",
+  "Polo",
+  "Trouser",
+  "Jacket",
+  "Shirt",
+  "Dress",
+  "Shorts",
+  "Hoodie",
+];
 
-function getEfficiencyColor(pct: number): string {
-  if (pct >= 75) return "text-green-700";
-  if (pct >= 55) return "text-amber-600";
-  return "text-red-600";
-}
+const NOTE_CATEGORIES = [
+  "Production Tip",
+  "Quality Alert",
+  "Costing Note",
+  "General",
+];
 
-function getPassRateColor(pct: number): string {
-  if (pct >= 90) return "text-green-700";
-  if (pct >= 70) return "text-amber-600";
-  return "text-red-600";
-}
-
-function getCategoryColor(category: string): string {
-  const map: Record<string, string> = {
-    "T-shirt": "bg-blue-100 text-blue-700",
-    Polo: "bg-indigo-100 text-indigo-700",
-    Hoodie: "bg-purple-100 text-purple-700",
-    Jacket: "bg-orange-100 text-orange-700",
-    Trouser: "bg-green-100 text-green-700",
-    Shorts: "bg-teal-100 text-teal-700",
-    Dress: "bg-pink-100 text-pink-700",
-    Shirt: "bg-cyan-100 text-cyan-700",
-    Sweatshirt: "bg-violet-100 text-violet-700",
-  };
-  return map[category] || "bg-gray-100 text-gray-700";
-}
-
-/* ---------- Skeleton ---------- */
-
-function StyleCardSkeleton() {
+// ---------------------------------------------------------------------------
+// Style Metric Mini Grid item
+// ---------------------------------------------------------------------------
+function MetricItem({
+  label,
+  value,
+  unit,
+  highlight,
+}: {
+  label: string;
+  value: string | number;
+  unit?: string;
+  highlight?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm animate-pulse">
-      <div className="space-y-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <div className="h-4 w-28 rounded bg-gray-200" />
-            <div className="h-3 w-40 rounded bg-gray-200" />
-          </div>
-          <div className="h-5 w-16 rounded bg-gray-200" />
-        </div>
-        <div className="h-3 w-24 rounded bg-gray-200" />
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="space-y-1">
-              <div className="h-3 w-14 rounded bg-gray-200" />
-              <div className="h-4 w-10 rounded bg-gray-200" />
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="text-center">
+      <p
+        className={cn(
+          "text-lg font-bold tabular-nums leading-none",
+          highlight ? "text-blue-600" : "text-gray-900"
+        )}
+      >
+        {value}
+        {unit && (
+          <span className="text-xs font-normal text-gray-400 ml-0.5">
+            {unit}
+          </span>
+        )}
+      </p>
+      <p className="text-[10px] text-gray-500 mt-1 leading-tight">{label}</p>
     </div>
   );
 }
 
-/* ---------- StyleCard Component ---------- */
-
-interface StyleCardItemProps {
-  style: StyleCardType;
-}
-
-function StyleCardItem({ style }: StyleCardItemProps) {
-  const [expanded, setExpanded] = React.useState(false);
-
+// ---------------------------------------------------------------------------
+// Skeleton grid
+// ---------------------------------------------------------------------------
+function GridSkeleton() {
   return (
-    <Card
-      className={cn(
-        "transition-shadow hover:shadow-md cursor-pointer",
-        expanded && "ring-1 ring-blue-200"
-      )}
-      onClick={() => setExpanded((v) => !v)}
-    >
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="text-sm font-bold text-gray-900 truncate">
-              {style.styleCode}
-            </CardTitle>
-            <p className="text-xs text-gray-500 truncate mt-0.5">
-              {style.styleName}
-            </p>
-          </div>
-          <Badge
-            className={cn(
-              "shrink-0 text-xs",
-              getCategoryColor(style.category)
-            )}
-          >
-            {style.category}
-          </Badge>
-        </div>
-        <p className="text-xs text-gray-400 mt-1">
-          Buyer: {style.buyer}
-        </p>
-      </CardHeader>
-
-      <CardContent className="pt-0">
-        {/* Key Metrics Grid */}
-        <div className="grid grid-cols-3 gap-x-4 gap-y-3 mb-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Orders
-            </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900">
-              {formatNumber(style.ordersCount)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Total Qty
-            </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900">
-              {formatNumber(style.totalQuantityProduced)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Fabric/pc
-            </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900">
-              {style.actualFabricPerPiece > 0
-                ? `${style.actualFabricPerPiece.toFixed(3)} m`
-                : "--"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Avg Eff %
-            </p>
-            <p
-              className={cn(
-                "text-sm font-bold tabular-nums",
-                style.avgEfficiency > 0
-                  ? getEfficiencyColor(style.avgEfficiency)
-                  : "text-gray-400"
-              )}
-            >
-              {style.avgEfficiency > 0 ? `${style.avgEfficiency}%` : "--"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              Marker Eff %
-            </p>
-            <p className="text-sm font-bold tabular-nums text-gray-900">
-              {style.markerEfficiency > 0
-                ? `${style.markerEfficiency}%`
-                : "--"}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">
-              QC Pass %
-            </p>
-            <p
-              className={cn(
-                "text-sm font-bold tabular-nums",
-                style.qualityPassRate > 0
-                  ? getPassRateColor(style.qualityPassRate)
-                  : "text-gray-400"
-              )}
-            >
-              {style.qualityPassRate > 0 ? `${style.qualityPassRate}%` : "--"}
-            </p>
-          </div>
-        </div>
-
-        {/* Common Defects */}
-        {style.commonDefects.length > 0 && (
-          <div className="mb-3">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-1">
-              Common Defects
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {style.commonDefects.map((defect) => (
-                <span
-                  key={defect}
-                  className="inline-block rounded-md bg-red-50 border border-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
-                >
-                  {defect}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Expand Toggle */}
-        <button
-          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium mt-1"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="h-3 w-3" />
-              Show less
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-3 w-3" />
-              Show details
-            </>
-          )}
-        </button>
-
-        {/* Expanded Details */}
-        {expanded && (
-          <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-              <div>
-                <span className="text-gray-400">BOM Fabric/pc:</span>{" "}
-                <span className="font-medium text-gray-700">
-                  {style.bomFabricPerPiece > 0
-                    ? `${style.bomFabricPerPiece.toFixed(3)} m`
-                    : "--"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Actual SMV:</span>{" "}
-                <span className="font-medium text-gray-700">
-                  {style.actualSmv > 0 ? style.actualSmv.toFixed(2) : "--"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Theoretical SMV:</span>{" "}
-                <span className="font-medium text-gray-700">
-                  {style.theoreticalSmv > 0
-                    ? style.theoreticalSmv.toFixed(2)
-                    : "--"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Recipe Used:</span>{" "}
-                <span className="font-medium text-gray-700">
-                  {style.recipeUsed || "--"}
-                </span>
-              </div>
-              <div className="col-span-2">
-                <span className="text-gray-400">Last Produced:</span>{" "}
-                <span className="font-medium text-gray-700">
-                  {style.lastProducedDate
-                    ? formatDate(style.lastProducedDate)
-                    : "--"}
-                </span>
-              </div>
-              {style.specialNotes && (
-                <div className="col-span-2">
-                  <span className="text-gray-400">Notes:</span>{" "}
-                  <span className="font-medium text-gray-700">
-                    {style.specialNotes}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Fabric Variance */}
-            {style.bomFabricPerPiece > 0 && style.actualFabricPerPiece > 0 && (
-              <div className="rounded-lg bg-gray-50 p-2 text-xs">
-                <span className="text-gray-500">Fabric Variance: </span>
-                {(() => {
-                  const variance =
-                    ((style.actualFabricPerPiece - style.bomFabricPerPiece) /
-                      style.bomFabricPerPiece) *
-                    100;
-                  return (
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        variance > 5
-                          ? "text-red-600"
-                          : variance > 0
-                          ? "text-amber-600"
-                          : "text-green-600"
-                      )}
-                    >
-                      {variance > 0 ? "+" : ""}
-                      {variance.toFixed(1)}% vs BOM
-                    </span>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-72 bg-gray-100 rounded-xl animate-pulse"
+        />
+      ))}
+    </div>
   );
 }
 
-/* ---------- Page ---------- */
-
-export default function StyleLibraryPage() {
+// ---------------------------------------------------------------------------
+// Page Component
+// ---------------------------------------------------------------------------
+export default function StyleLearningDatabasePage() {
   const { profile } = useProfile();
   const companyId = profile?.company_id;
 
+  // Data
   const [styles, setStyles] = React.useState<StyleCardType[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = React.useState("");
 
+  // Filters
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [categoryFilter, setCategoryFilter] = React.useState("All");
+  const [buyerFilter, setBuyerFilter] = React.useState("all");
+
+  // Detail sheet
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [activeStyle, setActiveStyle] = React.useState<StyleCardType | null>(
+    null
+  );
+  const [noteInput, setNoteInput] = React.useState("");
+  const [localNotes, setLocalNotes] = React.useState<
+    Map<string, Array<{ text: string; time: string; category: string }>>
+  >(new Map());
+
+  // Add Style Note sheet
+  const [addNoteOpen, setAddNoteOpen] = React.useState(false);
+  const [anStyle, setAnStyle] = React.useState("");
+  const [anCategory, setAnCategory] = React.useState("General");
+  const [anText, setAnText] = React.useState("");
+
+  // ---- Fetch data -------------------------------------------------------
   React.useEffect(() => {
     if (!companyId) return;
-
     let cancelled = false;
-
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await getStyleLearningData(companyId!);
-        if (result.error) {
-          if (!cancelled) setError(result.error);
-          toast.error("Failed to load style library data");
-        } else {
-          if (!cancelled) setStyles(result.data ?? []);
-        }
-      } catch {
-        if (!cancelled) setError("An unexpected error occurred");
-        toast.error("An unexpected error occurred");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchData();
+    setLoading(true);
+    getStyleLearningData(companyId).then((res) => {
+      if (cancelled) return;
+      if (res.error) setError(res.error);
+      else setStyles(res.data ?? []);
+      setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
   }, [companyId]);
 
-  /* ---------- Filtered Styles ---------- */
+  // ---- Derived data -----------------------------------------------------
+  const buyers = React.useMemo(() => {
+    const set = new Set(styles.map((s) => s.buyer));
+    return Array.from(set).sort();
+  }, [styles]);
 
   const filtered = React.useMemo(() => {
-    if (!searchQuery.trim()) return styles;
-    const q = searchQuery.toLowerCase();
-    return styles.filter(
-      (s) =>
-        s.styleCode.toLowerCase().includes(q) ||
-        s.styleName.toLowerCase().includes(q) ||
-        s.buyer.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q)
+    let result = styles;
+    if (categoryFilter !== "All") {
+      result = result.filter(
+        (s) => s.category.toLowerCase() === categoryFilter.toLowerCase()
+      );
+    }
+    if (buyerFilter !== "all") {
+      result = result.filter((s) => s.buyer === buyerFilter);
+    }
+    if (searchQuery.trim()) {
+      const lc = searchQuery.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.styleCode.toLowerCase().includes(lc) ||
+          s.styleName.toLowerCase().includes(lc) ||
+          s.buyer.toLowerCase().includes(lc) ||
+          s.category.toLowerCase().includes(lc)
+      );
+    }
+    return result;
+  }, [styles, categoryFilter, buyerFilter, searchQuery]);
+
+  const avgEfficiency = React.useMemo(() => {
+    const withEff = styles.filter((s) => s.avgEfficiency > 0);
+    if (withEff.length === 0) return 0;
+    return Math.round(
+      withEff.reduce((sum, s) => sum + s.avgEfficiency, 0) / withEff.length
     );
-  }, [styles, searchQuery]);
+  }, [styles]);
 
-  /* ---------- Stats ---------- */
-
-  const totalStyles = styles.length;
-  const avgEfficiency =
-    styles.length > 0
-      ? Math.round(
-          styles.reduce((s, st) => s + st.avgEfficiency, 0) / styles.length
-        )
-      : 0;
-  const avgQCPassRate =
-    styles.length > 0
-      ? Math.round(
-          styles.reduce((s, st) => s + st.qualityPassRate, 0) / styles.length
-        )
-      : 0;
-  const activeStyles = styles.filter(
-    (s) => s.ordersCount > 0
-  ).length;
-
-  /* ---------- Loading State ---------- */
-
-  if (!companyId || loading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Style Learning Database"
-          description="Historical data for every style ever produced"
-          breadcrumb={[
-            { label: "Dashboard", href: "/dashboard" },
-            { label: "Style Library" },
-          ]}
-        />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <StatCard key={i} title="" value="" loading />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <StyleCardSkeleton key={i} />
-          ))}
-        </div>
-      </div>
+  const avgQuality = React.useMemo(() => {
+    const withQual = styles.filter((s) => s.qualityPassRate > 0);
+    if (withQual.length === 0) return 0;
+    return Math.round(
+      withQual.reduce((sum, s) => sum + s.qualityPassRate, 0) / withQual.length
     );
-  }
+  }, [styles]);
 
-  /* ---------- Error State ---------- */
+  // ---- Handlers ---------------------------------------------------------
+  const openDetail = (style: StyleCardType) => {
+    setActiveStyle(style);
+    setDetailOpen(true);
+    setNoteInput("");
+  };
 
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Style Learning Database"
-          description="Historical data for every style ever produced"
-          breadcrumb={[
-            { label: "Dashboard", href: "/dashboard" },
-            { label: "Style Library" },
-          ]}
-        />
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <BookOpen className="mb-3 h-10 w-10 text-red-300" />
-          <p className="text-sm font-medium text-gray-600">{error}</p>
-          <p className="text-xs text-gray-400 mt-1">
-            Please try refreshing the page
-          </p>
-        </div>
-      </div>
+  const handleAddDetailNote = () => {
+    if (!activeStyle || !noteInput.trim()) return;
+    const notes = localNotes.get(activeStyle.id) || [];
+    notes.unshift({
+      text: noteInput.trim(),
+      time: new Date().toLocaleString("en-IN"),
+      category: "General",
+    });
+    setLocalNotes(new Map(localNotes.set(activeStyle.id, notes)));
+    setNoteInput("");
+    toast.success("Note added to style card");
+  };
+
+  const handleAddStyleNote = () => {
+    if (!anStyle || !anText.trim()) {
+      toast.error("Select a style and enter a note");
+      return;
+    }
+    const style = styles.find(
+      (s) => s.styleCode === anStyle || s.id === anStyle
     );
-  }
-
-  /* ---------- Empty State ---------- */
-
-  if (styles.length === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Style Learning Database"
-          description="Historical data for every style ever produced"
-          breadcrumb={[
-            { label: "Dashboard", href: "/dashboard" },
-            { label: "Style Library" },
-          ]}
-        />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Styles"
-            value="0"
-            icon={<BookOpen className="h-5 w-5" />}
-            color="blue"
-          />
-          <StatCard
-            title="Avg Efficiency %"
-            value="0%"
-            icon={<Gauge className="h-5 w-5" />}
-            color="green"
-          />
-          <StatCard
-            title="Avg QC Pass Rate %"
-            value="0%"
-            icon={<ShieldCheck className="h-5 w-5" />}
-            color="purple"
-          />
-          <StatCard
-            title="Active Styles"
-            value="0"
-            icon={<Layers className="h-5 w-5" />}
-            color="orange"
-          />
-        </div>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Layers className="mb-3 h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">
-            No styles found
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Add products in the Masters section to build your style library
-          </p>
-        </div>
-      </div>
+    const sid = style?.id || anStyle;
+    const notes = localNotes.get(sid) || [];
+    notes.unshift({
+      text: anText.trim(),
+      time: new Date().toLocaleString("en-IN"),
+      category: anCategory,
+    });
+    setLocalNotes(new Map(localNotes.set(sid, notes)));
+    toast.success(
+      `Note added to ${style?.styleCode || anStyle}`,
+      { description: `Category: ${anCategory}` }
     );
-  }
+    setAddNoteOpen(false);
+    setAnStyle("");
+    setAnText("");
+    setAnCategory("General");
+  };
 
-  /* ---------- Main Render ---------- */
-
+  // ======================================================================
+  // RENDER
+  // ======================================================================
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <PageHeader
         title="Style Learning Database"
-        description="Historical data for every style ever produced"
-        breadcrumb={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: "Style Library" },
-        ]}
+        description="When you get a similar order, pull up the style card for real data instead of guessing"
+        breadcrumb={[{ label: "Style Library" }]}
       />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Styles"
-          value={formatNumber(totalStyles)}
-          icon={<BookOpen className="h-5 w-5" />}
-          color="blue"
-        />
-        <StatCard
-          title="Avg Efficiency %"
-          value={`${avgEfficiency}%`}
-          icon={<Gauge className="h-5 w-5" />}
-          color="green"
-        />
-        <StatCard
-          title="Avg QC Pass Rate %"
-          value={`${avgQCPassRate}%`}
-          icon={<ShieldCheck className="h-5 w-5" />}
-          color="purple"
-        />
-        <StatCard
-          title="Active Styles"
-          value={formatNumber(activeStyles)}
-          icon={<Layers className="h-5 w-5" />}
-          color="orange"
-        />
-      </div>
-
-      {/* Search Bar */}
-      <div className="relative max-w-md">
+      {/* ---- Search Bar -------------------------------------------------- */}
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
-          type="text"
           placeholder="Search by style code, name, buyer, or category..."
+          className="pl-10 h-10"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
+        />
+        {searchQuery && (
+          <button
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            onClick={() => setSearchQuery("")}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Category chips + buyer filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {CATEGORY_CHIPS.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCategoryFilter(cat)}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-medium border transition-all",
+              categoryFilter === cat
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            {cat}
+          </button>
+        ))}
+        <div className="ml-auto">
+          <Select value={buyerFilter} onValueChange={setBuyerFilter}>
+            <SelectTrigger className="h-8 text-xs w-[160px]">
+              <SelectValue placeholder="All Buyers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Buyers</SelectItem>
+              {buyers.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* ---- Mini Stat Cards --------------------------------------------- */}
+      <div className="grid grid-cols-3 gap-4">
+        <StatCard
+          title="Total Styles"
+          value={formatNumber(styles.length)}
+          icon={<Layers className="h-4 w-4" />}
+          color="blue"
+          loading={loading}
+        />
+        <StatCard
+          title="Avg Efficiency"
+          value={`${avgEfficiency}%`}
+          icon={<Gauge className="h-4 w-4" />}
+          color="green"
+          loading={loading}
+        />
+        <StatCard
+          title="Avg Quality Pass Rate"
+          value={`${avgQuality}%`}
+          icon={<ShieldCheck className="h-4 w-4" />}
+          color="purple"
+          loading={loading}
         />
       </div>
 
-      {/* Results Count */}
-      {searchQuery.trim() && (
-        <p className="text-xs text-gray-500">
-          Showing {formatNumber(filtered.length)} of{" "}
-          {formatNumber(styles.length)} styles
-        </p>
+      {/* ---- Error ------------------------------------------------------- */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            {error}
+          </CardContent>
+        </Card>
       )}
 
-      {/* No Search Results */}
-      {filtered.length === 0 && searchQuery.trim() && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Search className="mb-3 h-8 w-8 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">
-            No styles match your search
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Try a different style code, name, or buyer
-          </p>
+      {/* ---- Loading ----------------------------------------------------- */}
+      {loading && <GridSkeleton />}
+
+      {/* ---- Empty state ------------------------------------------------- */}
+      {!loading && filtered.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <BookOpen className="h-12 w-12 text-gray-300 mb-3" />
+            <p className="font-medium text-gray-500">No styles found</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {searchQuery
+                ? "Try a different search term"
+                : "No style data available yet"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ---- Style Card Grid --------------------------------------------- */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map((style) => {
+            const defectColors = [
+              "bg-red-100 text-red-700 border-red-200",
+              "bg-orange-100 text-orange-700 border-orange-200",
+              "bg-amber-100 text-amber-700 border-amber-200",
+              "bg-yellow-100 text-yellow-700 border-yellow-200",
+              "bg-gray-100 text-gray-600 border-gray-200",
+            ];
+
+            return (
+              <Card
+                key={style.id}
+                className="hover:shadow-md transition-shadow group"
+              >
+                <CardContent className="p-5 space-y-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-bold text-gray-900 truncate">
+                        {style.styleCode}
+                      </h3>
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {style.styleName}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] shrink-0 bg-blue-50 text-blue-700 border-blue-200"
+                    >
+                      {style.buyer}
+                    </Badge>
+                  </div>
+
+                  {/* Category chip */}
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] font-medium"
+                  >
+                    {style.category}
+                  </Badge>
+
+                  <Separator />
+
+                  {/* 2x3 metrics grid */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <MetricItem
+                      label="Orders"
+                      value={style.ordersCount}
+                    />
+                    <MetricItem
+                      label="Total Qty"
+                      value={formatNumber(style.totalQuantityProduced)}
+                      unit="pcs"
+                    />
+                    <MetricItem
+                      label="Avg Efficiency"
+                      value={`${style.avgEfficiency}`}
+                      unit="%"
+                      highlight={style.avgEfficiency >= 70}
+                    />
+                    <MetricItem
+                      label="Marker Eff."
+                      value={`${style.markerEfficiency}`}
+                      unit="%"
+                    />
+                    <MetricItem
+                      label="Quality Pass"
+                      value={`${style.qualityPassRate}`}
+                      unit="%"
+                      highlight={style.qualityPassRate >= 90}
+                    />
+                    <MetricItem
+                      label="Fabric/Piece"
+                      value={style.actualFabricPerPiece.toFixed(3)}
+                      unit="m"
+                    />
+                  </div>
+
+                  {/* Common Defects */}
+                  {style.commonDefects.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-gray-400 font-medium mb-1.5">
+                        Common Defects
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {style.commonDefects.slice(0, 4).map((d, idx) => (
+                          <Badge
+                            key={d}
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] border",
+                              defectColors[idx] || defectColors[4]
+                            )}
+                          >
+                            {d}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* View Full Card button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs h-8 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200"
+                    onClick={() => openDetail(style)}
+                  >
+                    <FileText className="h-3.5 w-3.5 mr-1" />
+                    View Full Card
+                    <ChevronRight className="h-3 w-3 ml-auto" />
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Style Cards Grid */}
-      {filtered.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((style) => (
-            <StyleCardItem key={style.id} style={style} />
-          ))}
-        </div>
-      )}
+      {/* ================================================================ */}
+      {/* DETAIL SHEET                                                     */}
+      {/* ================================================================ */}
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          {activeStyle && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5 text-blue-600" />
+                  {activeStyle.styleCode}
+                </SheetTitle>
+                <SheetDescription>
+                  {activeStyle.styleName} -- {activeStyle.buyer} --{" "}
+                  {activeStyle.category}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-6 mt-6">
+                {/* Production Data */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    Production Data
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-[10px] text-gray-400">
+                        Actual Fabric/Piece
+                      </p>
+                      <p className="text-sm font-bold text-gray-900 tabular-nums">
+                        {activeStyle.actualFabricPerPiece.toFixed(3)} m
+                      </p>
+                      {activeStyle.bomFabricPerPiece > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          BOM: {activeStyle.bomFabricPerPiece.toFixed(3)} m
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-[10px] text-gray-400">Actual SMV</p>
+                      <p className="text-sm font-bold text-gray-900 tabular-nums">
+                        {activeStyle.actualSmv > 0
+                          ? activeStyle.actualSmv.toFixed(2)
+                          : "--"}
+                      </p>
+                      {activeStyle.theoreticalSmv > 0 && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          Theoretical: {activeStyle.theoreticalSmv.toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-[10px] text-gray-400">
+                        Avg Efficiency
+                      </p>
+                      <p
+                        className={cn(
+                          "text-sm font-bold tabular-nums",
+                          activeStyle.avgEfficiency >= 70
+                            ? "text-green-600"
+                            : activeStyle.avgEfficiency >= 50
+                              ? "text-amber-600"
+                              : "text-red-600"
+                        )}
+                      >
+                        {activeStyle.avgEfficiency}%
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
+                      <p className="text-[10px] text-gray-400">
+                        Marker Efficiency
+                      </p>
+                      <p className="text-sm font-bold text-gray-900 tabular-nums">
+                        {activeStyle.markerEfficiency > 0
+                          ? `${activeStyle.markerEfficiency}%`
+                          : "--"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Quality History */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                    <Award className="h-4 w-4 text-purple-600" />
+                    Quality History
+                  </h4>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 mb-3">
+                    <p className="text-[10px] text-gray-400">Pass Rate</p>
+                    <p
+                      className={cn(
+                        "text-lg font-bold tabular-nums",
+                        activeStyle.qualityPassRate >= 90
+                          ? "text-green-600"
+                          : activeStyle.qualityPassRate >= 70
+                            ? "text-amber-600"
+                            : "text-red-600"
+                      )}
+                    >
+                      {activeStyle.qualityPassRate}%
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Across {activeStyle.ordersCount} order(s)
+                    </p>
+                  </div>
+                  {activeStyle.commonDefects.length > 0 && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1.5">
+                        Common Defects
+                      </p>
+                      <div className="space-y-1">
+                        {activeStyle.commonDefects.map((d, idx) => (
+                          <div
+                            key={d}
+                            className="flex items-center gap-2 text-xs"
+                          >
+                            <span
+                              className={cn(
+                                "h-2 w-2 rounded-full shrink-0",
+                                idx === 0
+                                  ? "bg-red-500"
+                                  : idx === 1
+                                    ? "bg-orange-500"
+                                    : "bg-gray-400"
+                              )}
+                            />
+                            <span className="text-gray-700">{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Notes & Learnings */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    Notes & Learnings
+                  </h4>
+                  {activeStyle.specialNotes && (
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 mb-3">
+                      <p className="text-xs text-amber-800">
+                        {activeStyle.specialNotes}
+                      </p>
+                    </div>
+                  )}
+                  {/* Local notes */}
+                  {(localNotes.get(activeStyle.id) || []).length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {(localNotes.get(activeStyle.id) || []).map(
+                        (note, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-md border border-gray-100 bg-gray-50 p-2.5"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px]"
+                              >
+                                {note.category}
+                              </Badge>
+                              <span className="text-[10px] text-gray-400">
+                                {note.time}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-700">
+                              {note.text}
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                  {/* Add note inline */}
+                  <div className="flex gap-2">
+                    <Textarea
+                      placeholder="Add a note or learning..."
+                      className="text-sm flex-1"
+                      rows={2}
+                      value={noteInput}
+                      onChange={(e) => setNoteInput(e.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      className="self-end"
+                      onClick={handleAddDetailNote}
+                      disabled={!noteInput.trim()}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Recipe Used */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
+                    <Scissors className="h-4 w-4 text-blue-600" />
+                    Recipe / Process Notes
+                  </h4>
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600">
+                    {activeStyle.recipeUsed || "No recipe information recorded"}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ================================================================ */}
+      {/* ADD STYLE NOTE SHEET                                             */}
+      {/* ================================================================ */}
+      <Sheet open={addNoteOpen} onOpenChange={setAddNoteOpen}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Add Style Note</SheetTitle>
+            <SheetDescription>
+              Capture a learning for any style in the database
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 mt-6">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Style</Label>
+              <Select value={anStyle} onValueChange={setAnStyle}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select style" />
+                </SelectTrigger>
+                <SelectContent>
+                  {styles.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.styleCode} - {s.styleName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Category</Label>
+              <Select value={anCategory} onValueChange={setAnCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NOTE_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Note</Label>
+              <Textarea
+                placeholder="What did you learn about this style?"
+                value={anText}
+                onChange={(e) => setAnText(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <Button onClick={handleAddStyleNote} className="w-full">
+              <FileText className="h-4 w-4 mr-1.5" />
+              Save Note
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ---- Floating Action Button -------------------------------------- */}
+      <button
+        onClick={() => setAddNoteOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-lg hover:bg-blue-700 transition-all hover:shadow-xl active:scale-95"
+        aria-label="Add Style Note"
+      >
+        <Plus className="h-4 w-4" />
+        Add Style Note
+      </button>
     </div>
   );
 }
