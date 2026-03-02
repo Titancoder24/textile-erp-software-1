@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createOperation, updateOperation } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Operation = Database["public"]["Tables"]["operations"]["Row"]
@@ -58,11 +59,12 @@ type OperationFormValues = z.infer<typeof operationSchema>
 
 interface OperationFormProps {
   operation?: Operation | null
+  companyId: string
   onSuccess: (operation: Operation) => void
   onCancel?: () => void
 }
 
-export function OperationForm({ operation, onSuccess, onCancel }: OperationFormProps) {
+export function OperationForm({ operation, companyId, onSuccess, onCancel }: OperationFormProps) {
   const isEdit = !!operation
 
   const {
@@ -73,7 +75,8 @@ export function OperationForm({ operation, onSuccess, onCancel }: OperationFormP
     reset,
     formState: { errors, isSubmitting },
   } = useForm<OperationFormValues>({
-    resolver: zodResolver(operationSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(operationSchema) as any,
     defaultValues: {
       name: "",
       code: "",
@@ -102,12 +105,7 @@ export function OperationForm({ operation, onSuccess, onCancel }: OperationFormP
 
   async function onSubmit(values: OperationFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Operation = {
-        id: operation?.id ?? crypto.randomUUID(),
-        company_id: operation?.company_id ?? "",
-        created_at: operation?.created_at ?? new Date().toISOString(),
+      const payload = {
         name: values.name,
         code: values.code,
         department: values.department,
@@ -116,10 +114,19 @@ export function OperationForm({ operation, onSuccess, onCancel }: OperationFormP
         description: values.description || null,
       }
 
-      toast.success(isEdit ? "Operation updated" : "Operation created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save operation.")
+      if (isEdit && operation) {
+        const { data: result, error } = await updateOperation(operation.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Operation updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createOperation({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Operation created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save operation.")
     }
   }
 

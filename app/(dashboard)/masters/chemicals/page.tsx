@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getChemicals, deleteChemical } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,40 +47,8 @@ const CHEMICAL_TYPE_LABELS: Record<string, string> = {
   anti_crease: "Anti-Crease",
 }
 
-const MOCK_CHEMICALS: Chemical[] = [
-  {
-    id: "ch1", company_id: "c1", name: "Reactive Red M5B", code: "RRM5B",
-    chemical_type: "reactive_dye", uom: "kg", rate: 850,
-    supplier_id: "s3", is_active: true,
-    created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "ch2", company_id: "c1", name: "Disperse Blue 56", code: "DB56",
-    chemical_type: "disperse_dye", uom: "kg", rate: 1200,
-    supplier_id: "s3", is_active: true,
-    created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "ch3", company_id: "c1", name: "Macro Softener CT", code: "MSCT",
-    chemical_type: "softener", uom: "kg", rate: 220,
-    supplier_id: null, is_active: true,
-    created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "ch4", company_id: "c1", name: "Caustic Soda Flakes", code: "CSF",
-    chemical_type: "caustic", uom: "kg", rate: 45,
-    supplier_id: "s3", is_active: true,
-    created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-  {
-    id: "ch5", company_id: "c1", name: "Hydrogen Peroxide 50%", code: "HP50",
-    chemical_type: "peroxide", uom: "liter", rate: 38,
-    supplier_id: null, is_active: false,
-    created_at: "2024-01-05T00:00:00Z", updated_at: "2024-01-05T00:00:00Z",
-  },
-]
-
 export default function ChemicalsPage() {
+  const { companyId } = useCompany()
   const [chemicals, setChemicals] = useState<Chemical[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -88,14 +58,18 @@ export default function ChemicalsPage() {
   const fetchChemicals = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setChemicals(MOCK_CHEMICALS)
+      const { data, error } = await getChemicals(companyId)
+      if (error) {
+        toast.error("Failed to load chemicals")
+        return
+      }
+      setChemicals(data ?? [])
     } catch {
       toast.error("Failed to load chemicals")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchChemicals()
@@ -128,7 +102,11 @@ export default function ChemicalsPage() {
   async function handleDelete() {
     if (!deletingChemical) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteChemical(deletingChemical.id)
+      if (error) {
+        toast.error("Failed to delete chemical")
+        return
+      }
       setChemicals((prev) => prev.filter((c) => c.id !== deletingChemical.id))
       toast.success("Chemical deleted")
     } catch {
@@ -273,6 +251,7 @@ export default function ChemicalsPage() {
         footer={null}
       >
         <ChemicalForm
+          companyId={companyId}
           chemical={editingChemical}
           onSuccess={handleSuccess}
           onCancel={() => {

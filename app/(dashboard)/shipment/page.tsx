@@ -34,215 +34,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCompany } from "@/contexts/company-context";
+import { getShipments, createShipment } from "@/lib/actions/shipment";
+import { getBuyers } from "@/lib/actions/buyers";
+import { toast } from "sonner";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface Shipment {
   id: string;
-  shipmentNumber: string;
-  buyer: string;
-  orders: string[];
-  containerNumber: string;
-  containerType: string;
-  plannedShipDate: string;
-  etd: string;
-  eta: string;
-  portOfLoading: string;
-  portOfDischarge: string;
-  vesselName: string;
-  totalCartons: number;
-  totalPieces: number;
+  shipment_number: string;
+  buyer_name: string;
+  buyer_id: string;
+  order_ids: string[];
+  container_number: string | null;
+  container_type: string;
+  planned_shipment_date: string;
+  etd: string | null;
+  eta: string | null;
+  port_of_loading: string | null;
+  port_of_discharge: string | null;
+  vessel_name: string | null;
+  total_cartons: number;
+  total_pieces: number;
   status: "packing" | "ready" | "in_transit" | "delivered" | "delayed";
-  productionComplete: boolean;
-  qcPassed: boolean;
-  packingDone: boolean;
-  documentsReady: boolean;
-  transportArranged: boolean;
+  production_complete: boolean;
+  qc_passed: boolean;
+  packing_done: boolean;
+  documents_ready: boolean;
+  transport_arranged: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_SHIPMENTS: Shipment[] = [
-  {
-    id: "1",
-    shipmentNumber: "SHP-2026-0041",
-    buyer: "H&M",
-    orders: ["ORD-2026-0012", "ORD-2026-0011"],
-    containerNumber: "MSCU7823410",
-    containerType: "40ft",
-    plannedShipDate: "2026-03-05",
-    etd: "2026-03-06",
-    eta: "2026-03-28",
-    portOfLoading: "INNSA (Nhava Sheva)",
-    portOfDischarge: "DEHAM (Hamburg)",
-    vesselName: "MSC DIANA",
-    totalCartons: 840,
-    totalPieces: 25200,
-    status: "packing",
-    productionComplete: true,
-    qcPassed: true,
-    packingDone: false,
-    documentsReady: false,
-    transportArranged: false,
-  },
-  {
-    id: "2",
-    shipmentNumber: "SHP-2026-0040",
-    buyer: "Zara",
-    orders: ["ORD-2026-0009"],
-    containerNumber: "CSNU4512890",
-    containerType: "40HC",
-    plannedShipDate: "2026-03-10",
-    etd: "2026-03-11",
-    eta: "2026-03-30",
-    portOfLoading: "INMAA (Chennai)",
-    portOfDischarge: "ESVLC (Valencia)",
-    vesselName: "EVER GIVEN II",
-    totalCartons: 620,
-    totalPieces: 18600,
-    status: "ready",
-    productionComplete: true,
-    qcPassed: true,
-    packingDone: true,
-    documentsReady: true,
-    transportArranged: true,
-  },
-  {
-    id: "3",
-    shipmentNumber: "SHP-2026-0039",
-    buyer: "Primark",
-    orders: ["ORD-2026-0008", "ORD-2026-0007"],
-    containerNumber: "TEMU9234561",
-    containerType: "40ft",
-    plannedShipDate: "2026-02-20",
-    etd: "2026-02-21",
-    eta: "2026-03-10",
-    portOfLoading: "INKOL (Kolkata)",
-    portOfDischarge: "GBFXT (Felixstowe)",
-    vesselName: "CSCL ATLANTIC OCEAN",
-    totalCartons: 1120,
-    totalPieces: 44800,
-    status: "in_transit",
-    productionComplete: true,
-    qcPassed: true,
-    packingDone: true,
-    documentsReady: true,
-    transportArranged: true,
-  },
-  {
-    id: "4",
-    shipmentNumber: "SHP-2026-0038",
-    buyer: "Next",
-    orders: ["ORD-2026-0005"],
-    containerNumber: "OOLU6712345",
-    containerType: "20ft",
-    plannedShipDate: "2026-02-10",
-    etd: "2026-02-11",
-    eta: "2026-03-02",
-    portOfLoading: "INNSA (Nhava Sheva)",
-    portOfDischarge: "GBSOU (Southampton)",
-    vesselName: "APL RAFFLES",
-    totalCartons: 390,
-    totalPieces: 15600,
-    status: "delivered",
-    productionComplete: true,
-    qcPassed: true,
-    packingDone: true,
-    documentsReady: true,
-    transportArranged: true,
-  },
-  {
-    id: "5",
-    shipmentNumber: "SHP-2026-0037",
-    buyer: "Target",
-    orders: ["ORD-2026-0006"],
-    containerNumber: "HLXU8901234",
-    containerType: "40HC",
-    plannedShipDate: "2026-02-15",
-    etd: "2026-02-16",
-    eta: "2026-03-25",
-    portOfLoading: "INMUN (Mundra)",
-    portOfDischarge: "USLAX (Los Angeles)",
-    vesselName: "ONE INNOVATION",
-    totalCartons: 980,
-    totalPieces: 39200,
-    status: "delivered",
-    productionComplete: true,
-    qcPassed: true,
-    packingDone: true,
-    documentsReady: true,
-    transportArranged: true,
-  },
-  {
-    id: "6",
-    shipmentNumber: "SHP-2026-0042",
-    buyer: "Marks & Spencer",
-    orders: ["ORD-2026-0014"],
-    containerNumber: "",
-    containerType: "40ft",
-    plannedShipDate: "2026-03-22",
-    etd: "2026-03-23",
-    eta: "2026-04-15",
-    portOfLoading: "INNSA (Nhava Sheva)",
-    portOfDischarge: "GBFXT (Felixstowe)",
-    vesselName: "",
-    totalCartons: 750,
-    totalPieces: 30000,
-    status: "packing",
-    productionComplete: false,
-    qcPassed: false,
-    packingDone: false,
-    documentsReady: false,
-    transportArranged: false,
-  },
-  {
-    id: "7",
-    shipmentNumber: "SHP-2026-0036",
-    buyer: "Lidl",
-    orders: ["ORD-2026-0003"],
-    containerNumber: "CAIU7234567",
-    containerType: "40ft",
-    plannedShipDate: "2026-01-25",
-    etd: "2026-01-26",
-    eta: "2026-02-18",
-    portOfLoading: "INMAA (Chennai)",
-    portOfDischarge: "DEHAM (Hamburg)",
-    vesselName: "BALTIC WIND",
-    totalCartons: 560,
-    totalPieces: 22400,
-    status: "delayed",
-    productionComplete: true,
-    qcPassed: false,
-    packingDone: false,
-    documentsReady: false,
-    transportArranged: false,
-  },
-  {
-    id: "8",
-    shipmentNumber: "SHP-2026-0043",
-    buyer: "ASOS",
-    orders: ["ORD-2026-0016"],
-    containerNumber: "",
-    containerType: "20ft",
-    plannedShipDate: "2026-04-15",
-    etd: "2026-04-16",
-    eta: "2026-05-05",
-    portOfLoading: "INMUN (Mundra)",
-    portOfDischarge: "NLRTM (Rotterdam)",
-    vesselName: "",
-    totalCartons: 240,
-    totalPieces: 9600,
-    status: "packing",
-    productionComplete: false,
-    qcPassed: false,
-    packingDone: false,
-    documentsReady: false,
-    transportArranged: false,
-  },
-];
+interface Buyer {
+  id: string;
+  name: string;
+  code: string;
+}
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -262,11 +91,11 @@ const SHIPMENT_STATUS_MAP: Record<string, StatusConfig> = {
 
 function checklistCompletion(shipment: Shipment): number {
   const items = [
-    shipment.productionComplete,
-    shipment.qcPassed,
-    shipment.packingDone,
-    shipment.documentsReady,
-    shipment.transportArranged,
+    shipment.production_complete,
+    shipment.qc_passed,
+    shipment.packing_done,
+    shipment.documents_ready,
+    shipment.transport_arranged,
   ];
   const done = items.filter(Boolean).length;
   return Math.round((done / items.length) * 100);
@@ -281,23 +110,23 @@ function buildColumns(
 ): ColumnDef<Shipment>[] {
   return [
     {
-      accessorKey: "shipmentNumber",
+      accessorKey: "shipment_number",
       header: "Shipment #",
       cell: ({ row }) => (
         <button
           onClick={() => onSelect(row.original)}
           className="font-mono text-sm font-semibold text-blue-600 hover:underline"
         >
-          {row.original.shipmentNumber}
+          {row.original.shipment_number}
         </button>
       ),
     },
     {
-      accessorKey: "buyer",
+      accessorKey: "buyer_name",
       header: "Buyer",
       cell: ({ row }) => (
         <span className="text-sm font-medium text-gray-900">
-          {row.original.buyer}
+          {row.original.buyer_name}
         </span>
       ),
     },
@@ -306,7 +135,7 @@ function buildColumns(
       header: "Orders",
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1 max-w-[200px]">
-          {row.original.orders.map((o) => (
+          {(row.original.order_ids ?? []).map((o) => (
             <span
               key={o}
               className="inline-block bg-gray-100 text-gray-700 text-xs px-1.5 py-0.5 rounded font-mono"
@@ -318,14 +147,14 @@ function buildColumns(
       ),
     },
     {
-      accessorKey: "containerNumber",
+      accessorKey: "container_number",
       header: "Container #",
       cell: ({ row }) =>
-        row.original.containerNumber ? (
+        row.original.container_number ? (
           <span className="font-mono text-xs text-gray-700">
-            {row.original.containerNumber}
+            {row.original.container_number}
             <span className="ml-1.5 text-gray-400">
-              ({row.original.containerType})
+              ({row.original.container_type})
             </span>
           </span>
         ) : (
@@ -333,11 +162,11 @@ function buildColumns(
         ),
     },
     {
-      accessorKey: "plannedShipDate",
+      accessorKey: "planned_shipment_date",
       header: "Planned Ship",
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap">
-          {formatDate(row.original.plannedShipDate)}
+          {formatDate(row.original.planned_shipment_date)}
         </span>
       ),
     },
@@ -346,7 +175,7 @@ function buildColumns(
       header: "ETD",
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap">
-          {formatDate(row.original.etd)}
+          {row.original.etd ? formatDate(row.original.etd) : "-"}
         </span>
       ),
     },
@@ -355,7 +184,7 @@ function buildColumns(
       header: "ETA",
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap">
-          {formatDate(row.original.eta)}
+          {row.original.eta ? formatDate(row.original.eta) : "-"}
         </span>
       ),
     },
@@ -470,7 +299,7 @@ function ChecklistItem({
 // ---------------------------------------------------------------------------
 
 interface NewShipmentFormState {
-  buyer: string;
+  buyer_id: string;
   orders: string;
   containerNumber: string;
   containerType: string;
@@ -481,7 +310,7 @@ interface NewShipmentFormState {
 }
 
 const FORM_DEFAULTS: NewShipmentFormState = {
-  buyer: "",
+  buyer_id: "",
   orders: "",
   containerNumber: "",
   containerType: "40ft",
@@ -491,34 +320,35 @@ const FORM_DEFAULTS: NewShipmentFormState = {
   vesselName: "",
 };
 
+const PORTS = [
+  "INNSA (Nhava Sheva)",
+  "INMAA (Chennai)",
+  "INMUN (Mundra)",
+  "INKOL (Kolkata)",
+  "INBLR (Bangalore)",
+];
+
 function NewShipmentForm({
   form,
   onChange,
+  buyers,
 }: {
   form: NewShipmentFormState;
   onChange: (field: keyof NewShipmentFormState, value: string) => void;
+  buyers: Buyer[];
 }) {
-  const BUYERS = ["H&M", "Zara", "Primark", "Next", "Target", "Marks & Spencer", "Lidl", "ASOS"];
-  const PORTS = [
-    "INNSA (Nhava Sheva)",
-    "INMAA (Chennai)",
-    "INMUN (Mundra)",
-    "INKOL (Kolkata)",
-    "INBLR (Bangalore)",
-  ];
-
   return (
     <div className="space-y-5">
       <div className="space-y-1.5">
         <Label htmlFor="buyer">Buyer *</Label>
-        <Select value={form.buyer} onValueChange={(v) => onChange("buyer", v)}>
+        <Select value={form.buyer_id} onValueChange={(v) => onChange("buyer_id", v)}>
           <SelectTrigger id="buyer">
             <SelectValue placeholder="Select buyer..." />
           </SelectTrigger>
           <SelectContent>
-            {BUYERS.map((b) => (
-              <SelectItem key={b} value={b}>
-                {b}
+            {buyers.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -622,12 +452,82 @@ function NewShipmentForm({
 // ---------------------------------------------------------------------------
 
 export default function ShipmentPage() {
+  const { companyId, userId } = useCompany();
   const [selectedShipment, setSelectedShipment] =
-    React.useState<Shipment | null>(MOCK_SHIPMENTS[0]);
+    React.useState<Shipment | null>(null);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [form, setForm] = React.useState<NewShipmentFormState>(FORM_DEFAULTS);
   const [saving, setSaving] = React.useState(false);
-  const [shipments, setShipments] = React.useState<Shipment[]>(MOCK_SHIPMENTS);
+  const [shipments, setShipments] = React.useState<Shipment[]>([]);
+  const [buyers, setBuyers] = React.useState<Buyer[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  // ---- Fetch shipments from Supabase ----
+  const fetchShipments = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getShipments(companyId);
+      if (error) {
+        toast.error("Failed to load shipments");
+        return;
+      }
+      const mapped: Shipment[] = (data ?? []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        shipment_number: s.shipment_number as string,
+        buyer_name:
+          (s.buyers as Record<string, unknown>)?.name as string ?? "Unknown",
+        buyer_id: s.buyer_id as string,
+        order_ids: (s.order_ids as string[]) ?? [],
+        container_number: (s.container_number as string | null) ?? null,
+        container_type: (s.container_type as string) ?? "40ft",
+        planned_shipment_date: s.planned_shipment_date as string,
+        etd: (s.etd as string | null) ?? null,
+        eta: (s.eta as string | null) ?? null,
+        port_of_loading: (s.port_of_loading as string | null) ?? null,
+        port_of_discharge: (s.port_of_discharge as string | null) ?? null,
+        vessel_name: (s.vessel_name as string | null) ?? null,
+        total_cartons: (s.total_cartons as number) ?? 0,
+        total_pieces: (s.total_pieces as number) ?? 0,
+        status: s.status as Shipment["status"],
+        production_complete: (s.production_complete as boolean) ?? false,
+        qc_passed: (s.qc_passed as boolean) ?? false,
+        packing_done: (s.packing_done as boolean) ?? false,
+        documents_ready: (s.documents_ready as boolean) ?? false,
+        transport_arranged: (s.transport_arranged as boolean) ?? false,
+      }));
+      setShipments(mapped);
+      // Auto-select first shipment if none selected
+      if (mapped.length > 0 && !selectedShipment) {
+        setSelectedShipment(mapped[0]);
+      }
+    } catch {
+      toast.error("Failed to load shipments");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId, selectedShipment]);
+
+  // ---- Fetch buyers for the form dropdown ----
+  const fetchBuyers = React.useCallback(async () => {
+    try {
+      const { data, error } = await getBuyers(companyId);
+      if (error) return;
+      const mapped: Buyer[] = (data ?? []).map((b: Record<string, unknown>) => ({
+        id: b.id as string,
+        name: b.name as string,
+        code: b.code as string,
+      }));
+      setBuyers(mapped);
+    } catch {
+      // silent - buyers are supplementary
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchShipments();
+    fetchBuyers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columns = React.useMemo(
     () => buildColumns(setSelectedShipment),
@@ -681,57 +581,81 @@ export default function ShipmentPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function handleSave() {
-    if (!form.buyer || !form.plannedDate) return;
+  async function handleSave() {
+    if (!form.buyer_id || !form.plannedDate) return;
     setSaving(true);
-    setTimeout(() => {
-      const newShipment: Shipment = {
-        id: String(shipments.length + 1),
-        shipmentNumber: `SHP-2026-${String(44 + shipments.length).padStart(4, "0")}`,
-        buyer: form.buyer,
-        orders: form.orders
-          ? form.orders.split(",").map((o) => o.trim())
+    try {
+      const { data, error } = await createShipment({
+        company_id: companyId,
+        buyer_id: form.buyer_id,
+        planned_shipment_date: form.plannedDate,
+        container_number: form.containerNumber || undefined,
+        container_type: form.containerType || "40ft",
+        port_of_loading: form.portOfLoading || undefined,
+        port_of_discharge: form.portOfDischarge || undefined,
+        vessel_name: form.vesselName || undefined,
+        order_ids: form.orders
+          ? form.orders.split(",").map((o) => o.trim()).filter(Boolean)
           : [],
-        containerNumber: form.containerNumber,
-        containerType: form.containerType,
-        plannedShipDate: form.plannedDate,
-        etd: form.plannedDate,
-        eta: "",
-        portOfLoading: form.portOfLoading,
-        portOfDischarge: form.portOfDischarge,
-        vesselName: form.vesselName,
-        totalCartons: 0,
-        totalPieces: 0,
-        status: "packing",
-        productionComplete: false,
-        qcPassed: false,
-        packingDone: false,
-        documentsReady: false,
-        transportArranged: false,
-      };
-      setShipments((prev) => [newShipment, ...prev]);
-      setSaving(false);
+        created_by: userId,
+      });
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      toast.success("Shipment created successfully");
       setCreateOpen(false);
       setForm(FORM_DEFAULTS);
-    }, 800);
+      // Refresh the list
+      await fetchShipments();
+      // Select the newly created shipment
+      if (data) {
+        const newMapped: Shipment = {
+          id: data.id as string,
+          shipment_number: data.shipment_number as string,
+          buyer_name:
+            (data.buyers as Record<string, unknown>)?.name as string ?? "Unknown",
+          buyer_id: data.buyer_id as string,
+          order_ids: (data.order_ids as string[]) ?? [],
+          container_number: (data.container_number as string | null) ?? null,
+          container_type: (data.container_type as string) ?? "40ft",
+          planned_shipment_date: data.planned_shipment_date as string,
+          etd: (data.etd as string | null) ?? null,
+          eta: (data.eta as string | null) ?? null,
+          port_of_loading: (data.port_of_loading as string | null) ?? null,
+          port_of_discharge: (data.port_of_discharge as string | null) ?? null,
+          vessel_name: (data.vessel_name as string | null) ?? null,
+          total_cartons: (data.total_cartons as number) ?? 0,
+          total_pieces: (data.total_pieces as number) ?? 0,
+          status: data.status as Shipment["status"],
+          production_complete: (data.production_complete as boolean) ?? false,
+          qc_passed: (data.qc_passed as boolean) ?? false,
+          packing_done: (data.packing_done as boolean) ?? false,
+          documents_ready: (data.documents_ready as boolean) ?? false,
+          transport_arranged: (data.transport_arranged as boolean) ?? false,
+        };
+        setSelectedShipment(newMapped);
+      }
+    } catch {
+      toast.error("Failed to create shipment");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const pct = selectedShipment ? checklistCompletion(selectedShipment) : 0;
 
+  // Build buyer filter options dynamically from data
+  const buyerFilterOptions = React.useMemo(() => {
+    const unique = [...new Set(shipments.map((s) => s.buyer_name))].sort();
+    return unique.map((b) => ({ label: b, value: b }));
+  }, [shipments]);
+
   const FILTERS = [
     {
-      key: "buyer",
+      key: "buyer_name",
       label: "Buyer",
-      options: [
-        { label: "H&M", value: "H&M" },
-        { label: "Zara", value: "Zara" },
-        { label: "Primark", value: "Primark" },
-        { label: "Next", value: "Next" },
-        { label: "Target", value: "Target" },
-        { label: "Marks & Spencer", value: "Marks & Spencer" },
-        { label: "Lidl", value: "Lidl" },
-        { label: "ASOS", value: "ASOS" },
-      ],
+      options: buyerFilterOptions,
     },
     {
       key: "status",
@@ -798,10 +722,11 @@ export default function ShipmentPage() {
               <DataTable
                 columns={columns}
                 data={shipments}
-                searchKey="shipmentNumber"
+                searchKey="shipment_number"
                 searchPlaceholder="Search shipment number..."
                 filters={FILTERS}
                 onRowClick={setSelectedShipment}
+                loading={loading}
                 emptyMessage="No shipments found. Create your first shipment."
               />
             </CardContent>
@@ -821,8 +746,8 @@ export default function ShipmentPage() {
                     </h3>
                     {selectedShipment ? (
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {selectedShipment.shipmentNumber} &mdash;{" "}
-                        {selectedShipment.buyer}
+                        {selectedShipment.shipment_number} &mdash;{" "}
+                        {selectedShipment.buyer_name}
                       </p>
                     ) : (
                       <p className="text-xs text-gray-400 mt-0.5">
@@ -857,11 +782,11 @@ export default function ShipmentPage() {
                     />
                     <p className="mt-1 text-xs text-gray-400">
                       {[
-                        selectedShipment.productionComplete,
-                        selectedShipment.qcPassed,
-                        selectedShipment.packingDone,
-                        selectedShipment.documentsReady,
-                        selectedShipment.transportArranged,
+                        selectedShipment.production_complete,
+                        selectedShipment.qc_passed,
+                        selectedShipment.packing_done,
+                        selectedShipment.documents_ready,
+                        selectedShipment.transport_arranged,
                       ].filter(Boolean).length}{" "}
                       of 5 tasks complete
                     </p>
@@ -875,27 +800,27 @@ export default function ShipmentPage() {
                   <>
                     <ChecklistItem
                       label="Production Complete"
-                      checked={selectedShipment.productionComplete}
+                      checked={selectedShipment.production_complete}
                       icon={<Package className="h-4 w-4" />}
                     />
                     <ChecklistItem
                       label="QC Passed"
-                      checked={selectedShipment.qcPassed}
+                      checked={selectedShipment.qc_passed}
                       icon={<CheckCircle2 className="h-4 w-4" />}
                     />
                     <ChecklistItem
                       label="Packing Done"
-                      checked={selectedShipment.packingDone}
+                      checked={selectedShipment.packing_done}
                       icon={<Package className="h-4 w-4" />}
                     />
                     <ChecklistItem
                       label="Documents Ready"
-                      checked={selectedShipment.documentsReady}
+                      checked={selectedShipment.documents_ready}
                       icon={<FileText className="h-4 w-4" />}
                     />
                     <ChecklistItem
                       label="Transport Arranged"
-                      checked={selectedShipment.transportArranged}
+                      checked={selectedShipment.transport_arranged}
                       icon={<Truck className="h-4 w-4" />}
                     />
                   </>
@@ -913,11 +838,11 @@ export default function ShipmentPage() {
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                     <span className="truncate">
-                      {selectedShipment.portOfLoading || "Port TBD"}
+                      {selectedShipment.port_of_loading || "Port TBD"}
                     </span>
                     <ChevronRight className="h-3 w-3 text-gray-300 shrink-0" />
                     <span className="truncate">
-                      {selectedShipment.portOfDischarge || "Port TBD"}
+                      {selectedShipment.port_of_discharge || "Port TBD"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -930,21 +855,21 @@ export default function ShipmentPage() {
                       ETA {selectedShipment.eta ? formatDate(selectedShipment.eta) : "TBD"}
                     </span>
                   </div>
-                  {selectedShipment.vesselName && (
+                  {selectedShipment.vessel_name && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Ship className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                      <span>{selectedShipment.vesselName}</span>
+                      <span>{selectedShipment.vessel_name}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Package className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                     <span>
-                      {selectedShipment.totalCartons.toLocaleString()} ctns /{" "}
-                      {selectedShipment.totalPieces.toLocaleString()} pcs
+                      {selectedShipment.total_cartons.toLocaleString()} ctns /{" "}
+                      {selectedShipment.total_pieces.toLocaleString()} pcs
                     </span>
                   </div>
 
-                  {delayed && selectedShipment.status === "delayed" && (
+                  {delayed > 0 && selectedShipment.status === "delayed" && (
                     <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-50 border border-red-200 px-2.5 py-1.5 text-xs text-red-700">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                       Shipment is delayed. Action required.
@@ -968,7 +893,7 @@ export default function ShipmentPage() {
         saving={saving}
         size="md"
       >
-        <NewShipmentForm form={form} onChange={handleFormChange} />
+        <NewShipmentForm form={form} onChange={handleFormChange} buyers={buyers} />
       </FormSheet>
     </div>
   );

@@ -20,12 +20,16 @@ import {
   Clock,
   AlertTriangle,
   CalendarDays,
+  Loader2,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { PageHeader } from "@/components/ui/page-header";
+import { useCompany } from "@/contexts/company-context";
+import { getTNAOrders, updateMilestone } from "@/lib/actions/tna";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 type TNAStatus = "done" | "in_progress" | "pending" | "delayed";
@@ -48,59 +52,13 @@ interface OrderTNA {
   milestones: TNAMilestone[];
 }
 
-const MOCK_TNA_ORDERS: OrderTNA[] = [
-  {
-    orderId: "1",
-    orderNumber: "ORD-2026-0012",
-    buyer: "H&M",
-    style: "Men's Woven Shirt",
-    deliveryDate: "2026-03-05",
-    milestones: [
-      { id: "m1", name: "Order Confirmation", plannedDate: "2026-01-15", actualDate: "2026-01-15", status: "done", department: "Merchandising" },
-      { id: "m2", name: "Fabric Booking", plannedDate: "2026-01-20", actualDate: "2026-01-19", status: "done", department: "Purchase" },
-      { id: "m3", name: "Trim Booking", plannedDate: "2026-01-22", actualDate: "2026-01-22", status: "done", department: "Purchase" },
-      { id: "m4", name: "Fabric In-House", plannedDate: "2026-02-05", actualDate: "2026-02-06", status: "done", department: "Store" },
-      { id: "m5", name: "Cutting Start", plannedDate: "2026-02-10", actualDate: "2026-02-11", status: "done", department: "Production" },
-      { id: "m6", name: "Sewing Start", plannedDate: "2026-02-15", actualDate: "2026-02-16", status: "in_progress", department: "Production" },
-      { id: "m7", name: "Finishing", plannedDate: "2026-02-25", status: "pending", department: "Production" },
-      { id: "m8", name: "Ex-Factory", plannedDate: "2026-03-01", status: "pending", department: "Shipping" },
-    ],
-  },
-  {
-    orderId: "2",
-    orderNumber: "ORD-2026-0013",
-    buyer: "Zara",
-    style: "Women's Knitwear",
-    deliveryDate: "2026-03-15",
-    milestones: [
-      { id: "m9", name: "Order Confirmation", plannedDate: "2026-01-22", actualDate: "2026-01-22", status: "done", department: "Merchandising" },
-      { id: "m10", name: "Fabric Booking", plannedDate: "2026-01-28", actualDate: "2026-01-30", status: "done", department: "Purchase" },
-      { id: "m11", name: "Trim Booking", plannedDate: "2026-02-01", actualDate: "2026-02-01", status: "done", department: "Purchase" },
-      { id: "m12", name: "Fabric In-House", plannedDate: "2026-02-12", status: "in_progress", department: "Store" },
-      { id: "m13", name: "Cutting Start", plannedDate: "2026-02-18", status: "pending", department: "Production" },
-      { id: "m14", name: "Sewing Start", plannedDate: "2026-02-22", status: "pending", department: "Production" },
-      { id: "m15", name: "Finishing", plannedDate: "2026-03-05", status: "pending", department: "Production" },
-      { id: "m16", name: "Ex-Factory", plannedDate: "2026-03-12", status: "pending", department: "Shipping" },
-    ],
-  },
-  {
-    orderId: "3",
-    orderNumber: "ORD-2026-0014",
-    buyer: "Marks & Spencer",
-    style: "Kids T-Shirt",
-    deliveryDate: "2026-03-22",
-    milestones: [
-      { id: "m17", name: "Order Confirmation", plannedDate: "2026-01-30", actualDate: "2026-01-30", status: "done", department: "Merchandising" },
-      { id: "m18", name: "Fabric Booking", plannedDate: "2026-02-03", actualDate: "2026-02-03", status: "done", department: "Purchase" },
-      { id: "m19", name: "Trim Booking", plannedDate: "2026-02-05", actualDate: "2026-02-07", status: "delayed", department: "Purchase" },
-      { id: "m20", name: "Fabric In-House", plannedDate: "2026-02-18", status: "pending", department: "Store" },
-      { id: "m21", name: "Cutting Start", plannedDate: "2026-02-22", status: "pending", department: "Production" },
-      { id: "m22", name: "Sewing Start", plannedDate: "2026-02-26", status: "pending", department: "Production" },
-      { id: "m23", name: "Finishing", plannedDate: "2026-03-10", status: "pending", department: "Production" },
-      { id: "m24", name: "Ex-Factory", plannedDate: "2026-03-18", status: "pending", department: "Shipping" },
-    ],
-  },
-];
+// Map DB status to UI status
+function mapDBStatus(dbStatus: string): TNAStatus {
+  if (dbStatus === "completed") return "done";
+  if (dbStatus === "delayed") return "delayed";
+  if (dbStatus === "in_progress") return "in_progress";
+  return "pending";
+}
 
 // ---------------------------------------------------------------------------
 // Status configs
@@ -441,7 +399,46 @@ function TableView({
 // ---------------------------------------------------------------------------
 
 export default function TNAPage() {
-  const [orders, setOrders] = React.useState(MOCK_TNA_ORDERS);
+  const { companyId } = useCompany();
+  const [orders, setOrders] = React.useState<OrderTNA[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [updating, setUpdating] = React.useState(false);
+
+  // Fetch TNA orders
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getTNAOrders(companyId);
+      if (error) {
+        toast.error("Failed to load TNA data", { description: error });
+        return;
+      }
+      const mapped: OrderTNA[] = (data ?? []).map((o) => ({
+        orderId: o.orderId,
+        orderNumber: o.orderNumber,
+        buyer: o.buyer,
+        style: o.style,
+        deliveryDate: o.deliveryDate,
+        milestones: o.milestones.map((m) => ({
+          id: m.id,
+          name: m.name,
+          plannedDate: m.plannedDate,
+          actualDate: m.actualDate || undefined,
+          status: mapDBStatus(m.status),
+          department: m.department,
+        })),
+      }));
+      setOrders(mapped);
+    } catch {
+      toast.error("Failed to load TNA data");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Update dialog state
   const [updateDialog, setUpdateDialog] = React.useState<{
@@ -460,24 +457,25 @@ export default function TNAPage() {
     });
   }
 
-  function handleConfirmUpdate() {
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.orderId !== updateDialog.orderId) return order;
-        return {
-          ...order,
-          milestones: order.milestones.map((m) => {
-            if (m.id !== updateDialog.milestoneId) return m;
-            return {
-              ...m,
-              actualDate: updateDialog.actualDate,
-              status: "done" as TNAStatus,
-            };
-          }),
-        };
-      })
-    );
-    setUpdateDialog({ open: false, milestoneId: "", orderId: "", actualDate: "" });
+  async function handleConfirmUpdate() {
+    setUpdating(true);
+    try {
+      const { error } = await updateMilestone(
+        updateDialog.milestoneId,
+        updateDialog.actualDate
+      );
+      if (error) {
+        toast.error("Failed to update milestone", { description: error });
+        return;
+      }
+      toast.success("Milestone updated successfully");
+      setUpdateDialog({ open: false, milestoneId: "", orderId: "", actualDate: "" });
+      fetchData();
+    } catch {
+      toast.error("Failed to update milestone");
+    } finally {
+      setUpdating(false);
+    }
   }
 
   const allMilestones = orders.flatMap((o) => o.milestones);
@@ -485,6 +483,14 @@ export default function TNAPage() {
   const completedCount = allMilestones.filter((m) => m.status === "done").length;
   const overdueCount = allMilestones.filter((m) => isOverdue(m)).length;
   const upcomingThisWeek = allMilestones.filter((m) => isUpcomingThisWeek(m)).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -573,8 +579,15 @@ export default function TNAPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleConfirmUpdate}>
-              Mark as Completed
+            <Button onClick={handleConfirmUpdate} disabled={updating}>
+              {updating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Mark as Completed"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

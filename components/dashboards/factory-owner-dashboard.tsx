@@ -131,7 +131,7 @@ export function FactoryOwnerDashboard({ companyId }: FactoryOwnerDashboardProps)
               .lte("planned_shipment_date", sevenDaysLater),
             supabase
               .from("audit_logs")
-              .select("id, action, entity_type, entity_id, created_at, profiles(full_name)")
+              .select("id, action, table_name, record_id, user_email, created_at")
               .eq("company_id", companyId)
               .order("created_at", { ascending: false })
               .limit(10),
@@ -226,7 +226,7 @@ export function FactoryOwnerDashboard({ companyId }: FactoryOwnerDashboardProps)
         // Activity
         const activities = (activityResult.data ?? []).map((a) => ({
           id: a.id,
-          description: `${(a.profiles as { full_name?: string } | null)?.full_name ?? "User"} ${a.action} ${a.entity_type} ${a.entity_id ?? ""}`.trim(),
+          description: `${a.user_email ?? "User"} ${a.action} ${a.table_name} ${a.record_id ?? ""}`.trim(),
           timestamp: a.created_at,
         }));
 

@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { DataTable } from "@/components/data-table/data-table"
 import { FormSheet } from "@/components/forms/form-sheet"
 import { BuyerForm } from "@/components/forms/masters/buyer-form"
+import { useCompany } from "@/contexts/company-context"
+import { getBuyers, deleteBuyer } from "@/lib/actions/buyers"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,66 +35,9 @@ import type { Database } from "@/types/database"
 
 type Buyer = Database["public"]["Tables"]["buyers"]["Row"]
 
-// Mock data for demonstration
-const MOCK_BUYERS: Buyer[] = [
-  {
-    id: "1",
-    company_id: "c1",
-    name: "H&M Group",
-    code: "HMG",
-    contact_person: "Anna Lindqvist",
-    email: "sourcing@hm.com",
-    phone: "+46 31 700 00 00",
-    address: "Mäster Samuelsgatan 46A",
-    city: "Stockholm",
-    country: "Sweden",
-    payment_terms: "Net 60",
-    quality_standard: "GOTS",
-    default_currency: "USD",
-    is_active: true,
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "2",
-    company_id: "c1",
-    name: "Marks & Spencer",
-    code: "MNS",
-    contact_person: "James Harrison",
-    email: "buying@marksandspencer.com",
-    phone: "+44 20 7935 4422",
-    address: "Waterside House, 35 North Wharf Road",
-    city: "London",
-    country: "United Kingdom",
-    payment_terms: "LC at sight",
-    quality_standard: "BSCI",
-    default_currency: "GBP",
-    is_active: true,
-    created_at: "2024-02-10T10:00:00Z",
-    updated_at: "2024-02-10T10:00:00Z",
-  },
-  {
-    id: "3",
-    company_id: "c1",
-    name: "Zara (Inditex)",
-    code: "ZAR",
-    contact_person: "Carlos Rodrigues",
-    email: "sourcing@inditex.com",
-    phone: "+34 981 185 400",
-    address: "Av. de la Diputación, s/n",
-    city: "Arteixo",
-    country: "Spain",
-    payment_terms: "Net 45",
-    quality_standard: "ISO 9001",
-    default_currency: "EUR",
-    is_active: false,
-    created_at: "2024-03-01T10:00:00Z",
-    updated_at: "2024-03-01T10:00:00Z",
-  },
-]
-
 export default function BuyersPage() {
   const router = useRouter()
+  const { companyId } = useCompany()
   const [buyers, setBuyers] = useState<Buyer[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -103,15 +48,18 @@ export default function BuyersPage() {
   const fetchBuyers = useCallback(async () => {
     setLoading(true)
     try {
-      // Replace with actual Supabase fetch
-      await new Promise((r) => setTimeout(r, 400))
-      setBuyers(MOCK_BUYERS)
+      const { data, error } = await getBuyers(companyId)
+      if (error) {
+        toast.error("Failed to load buyers")
+        return
+      }
+      setBuyers(data ?? [])
     } catch {
       toast.error("Failed to load buyers")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchBuyers()
@@ -151,7 +99,11 @@ export default function BuyersPage() {
   async function handleDelete() {
     if (!deletingBuyer) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteBuyer(deletingBuyer.id)
+      if (error) {
+        toast.error("Failed to delete buyer")
+        return
+      }
       setBuyers((prev) => prev.filter((b) => b.id !== deletingBuyer.id))
       toast.success("Buyer deleted successfully")
     } catch {
@@ -342,6 +294,7 @@ export default function BuyersPage() {
       >
         <BuyerForm
           buyer={editingBuyer}
+          companyId={companyId}
           onSuccess={handleSuccess}
           onCancel={() => {
             setOpen(false)

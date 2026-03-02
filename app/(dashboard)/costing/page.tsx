@@ -15,7 +15,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-import { cn, formatDate, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/data-table/data-table";
@@ -23,6 +23,9 @@ import { createActionsColumn } from "@/components/data-table/columns";
 import { StatusBadge, type StatusConfig } from "@/components/ui/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { useCompany } from "@/contexts/company-context";
+import { getCostSheets } from "@/lib/actions/finance";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,91 +46,6 @@ interface CostSheet {
   currency: string;
   date: string;
 }
-
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_COST_SHEETS: CostSheet[] = [
-  {
-    id: "1",
-    costSheetNumber: "CS-2026-0018",
-    product: "Men's Woven Shirt",
-    orderNumber: "ORD-2026-0012",
-    version: 2,
-    status: "approved",
-    fobPrice: 8.5,
-    costPerPiece: 6.38,
-    marginPercent: 24.9,
-    currency: "USD",
-    date: "2026-01-18",
-  },
-  {
-    id: "2",
-    costSheetNumber: "CS-2026-0019",
-    product: "Women's Knitwear",
-    orderNumber: "ORD-2026-0013",
-    version: 1,
-    status: "draft",
-    fobPrice: 12.0,
-    costPerPiece: 8.9,
-    marginPercent: 25.8,
-    currency: "USD",
-    date: "2026-02-01",
-  },
-  {
-    id: "3",
-    costSheetNumber: "CS-2026-0020",
-    product: "Kids T-Shirt",
-    orderNumber: "ORD-2026-0014",
-    version: 1,
-    status: "approved",
-    fobPrice: 4.75,
-    costPerPiece: 3.56,
-    marginPercent: 25.1,
-    currency: "USD",
-    date: "2026-02-05",
-  },
-  {
-    id: "4",
-    costSheetNumber: "CS-2026-0021",
-    product: "Denim Jeans",
-    orderNumber: null,
-    version: 3,
-    status: "actual",
-    fobPrice: 15.0,
-    costPerPiece: 11.85,
-    marginPercent: 21.0,
-    currency: "USD",
-    date: "2026-01-10",
-  },
-  {
-    id: "5",
-    costSheetNumber: "CS-2026-0022",
-    product: "Sports Polo",
-    orderNumber: "ORD-2026-0010",
-    version: 1,
-    status: "approved",
-    fobPrice: 5.5,
-    costPerPiece: 4.13,
-    marginPercent: 24.9,
-    currency: "USD",
-    date: "2026-02-12",
-  },
-  {
-    id: "6",
-    costSheetNumber: "CS-2026-0023",
-    product: "Casual Hoodie",
-    orderNumber: "ORD-2026-0016",
-    version: 1,
-    status: "draft",
-    fobPrice: 22.0,
-    costPerPiece: 16.28,
-    marginPercent: 26.0,
-    currency: "USD",
-    date: "2026-02-20",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -277,8 +195,60 @@ function buildColumns(
 
 export default function CostingPage() {
   const router = useRouter();
+  const { companyId } = useCompany();
+  const [costSheets, setCostSheets] = React.useState<CostSheet[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const fetchCostSheets = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getCostSheets(companyId);
+      if (error) {
+        toast.error("Failed to load cost sheets");
+        return;
+      }
+      if (!data) {
+        setCostSheets([]);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped: CostSheet[] = data.map((cs: any) => {
+        const product = cs.products;
+        const order = cs.sales_orders;
+        const fobPrice = Number(cs.fob_price) || Number(cs.fob_price_usd) || 0;
+        const totalCost = Number(cs.total_cost) || 0;
+        const marginPercent = fobPrice > 0 ? ((fobPrice - totalCost) / fobPrice) * 100 : 0;
+
+        return {
+          id: cs.id,
+          costSheetNumber: cs.cs_number,
+          product: product?.name ?? "Unknown",
+          orderNumber: order?.order_number ?? null,
+          version: cs.version ?? 1,
+          status: (cs.status ?? "draft") as CostSheetStatus,
+          fobPrice,
+          costPerPiece: totalCost,
+          marginPercent,
+          currency: cs.currency ?? "USD",
+          date: cs.created_at,
+        };
+      });
+
+      setCostSheets(mapped);
+    } catch {
+      toast.error("Failed to load cost sheets");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchCostSheets();
+  }, [fetchCostSheets]);
+
   const columns = React.useMemo(() => buildColumns(router), [router]);
-  const stats = computeStats(MOCK_COST_SHEETS);
+  const stats = computeStats(costSheets);
 
   const FILTERS = [
     {
@@ -336,7 +306,8 @@ export default function CostingPage() {
 
       <DataTable
         columns={columns}
-        data={MOCK_COST_SHEETS}
+        data={costSheets}
+        loading={loading}
         searchKey="costSheetNumber"
         searchPlaceholder="Search by cost sheet number..."
         filters={FILTERS}

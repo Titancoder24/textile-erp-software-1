@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Minus,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -27,208 +28,14 @@ import {
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCompany } from "@/contexts/company-context";
+import { getStyleProfitability } from "@/lib/actions/finance";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Mock Data - 15 styles with realistic margins
+// Types
 // ---------------------------------------------------------------------------
 
-interface StyleRow {
-  id: string;
-  styleCode: string;
-  styleName: string;
-  buyer: string;
-  orderQty: number;
-  fobPriceUsd: number;
-  exchangeRate: number;
-  actualCogs: number;
-  budgetedMarginPct: number;
-  varianceReason: string;
-}
-
-const RAW_STYLES: StyleRow[] = [
-  {
-    id: "1",
-    styleCode: "HM-2026-W12",
-    styleName: "Women's Woven Shirt",
-    buyer: "H&M",
-    orderQty: 12000,
-    fobPriceUsd: 8.5,
-    exchangeRate: 84.2,
-    actualCogs: 598,
-    budgetedMarginPct: 24.0,
-    varianceReason: "Fabric cost reduced due to bulk discount from Vardhman",
-  },
-  {
-    id: "2",
-    styleCode: "ZRA-2026-KW",
-    styleName: "Women's Knitwear Pullover",
-    buyer: "Zara",
-    orderQty: 8500,
-    fobPriceUsd: 12.0,
-    exchangeRate: 84.2,
-    actualCogs: 720,
-    budgetedMarginPct: 28.0,
-    varianceReason: "Rejection rate lower than budgeted (2.1% vs 3.0%)",
-  },
-  {
-    id: "3",
-    styleCode: "NXT-2026-BL",
-    styleName: "Ladies Cotton Blouse",
-    buyer: "Next",
-    orderQty: 4500,
-    fobPriceUsd: 9.25,
-    exchangeRate: 84.2,
-    actualCogs: 655,
-    budgetedMarginPct: 20.0,
-    varianceReason: "Extra trims used for buyer-mandated design change",
-  },
-  {
-    id: "4",
-    styleCode: "PRM-2026-DJ",
-    styleName: "Denim Jeans Regular Fit",
-    buyer: "Primark",
-    orderQty: 6000,
-    fobPriceUsd: 15.0,
-    exchangeRate: 84.2,
-    actualCogs: 920,
-    budgetedMarginPct: 26.0,
-    varianceReason: "Embroidery SMV exceeded budget by 12%",
-  },
-  {
-    id: "5",
-    styleCode: "HM-2026-KT",
-    styleName: "Kids Cotton T-Shirt",
-    buyer: "H&M",
-    orderQty: 25000,
-    fobPriceUsd: 4.75,
-    exchangeRate: 84.2,
-    actualCogs: 328,
-    budgetedMarginPct: 18.0,
-    varianceReason: "Volume benefit - lower overhead per unit",
-  },
-  {
-    id: "6",
-    styleCode: "LDL-2026-SP",
-    styleName: "Men's Sports Polo",
-    buyer: "Lidl",
-    orderQty: 18000,
-    fobPriceUsd: 5.5,
-    exchangeRate: 84.2,
-    actualCogs: 410,
-    budgetedMarginPct: 12.0,
-    varianceReason: "Dyeing rejection caused 2.3% extra rework cost",
-  },
-  {
-    id: "7",
-    styleCode: "ASO-2026-CH",
-    styleName: "Casual Hoodie Fleece",
-    buyer: "ASOS",
-    orderQty: 3200,
-    fobPriceUsd: 22.0,
-    exchangeRate: 84.2,
-    actualCogs: 1260,
-    budgetedMarginPct: 30.0,
-    varianceReason: "Premium fabric and AQL 1.5 inspection standard",
-  },
-  {
-    id: "8",
-    styleCode: "TSC-2026-BT",
-    styleName: "Basic Round Neck Tee",
-    buyer: "Tesco",
-    orderQty: 30000,
-    fobPriceUsd: 3.25,
-    exchangeRate: 84.2,
-    actualCogs: 236,
-    budgetedMarginPct: 14.0,
-    varianceReason: "Yarn price spike in Nov, cost up 4%",
-  },
-  {
-    id: "9",
-    styleCode: "HM-2026-TRK",
-    styleName: "Men's Track Pants",
-    buyer: "H&M",
-    orderQty: 7200,
-    fobPriceUsd: 7.8,
-    exchangeRate: 84.2,
-    actualCogs: 570,
-    budgetedMarginPct: 16.0,
-    varianceReason: "Elastic wastage reduced through process improvement",
-  },
-  {
-    id: "10",
-    styleCode: "ZRA-2026-LD",
-    styleName: "Ladies Denim Jacket",
-    buyer: "Zara",
-    orderQty: 2800,
-    fobPriceUsd: 28.0,
-    exchangeRate: 84.2,
-    actualCogs: 1960,
-    budgetedMarginPct: 22.0,
-    varianceReason: "Denim shrinkage higher than expected in pre-wash",
-  },
-  {
-    id: "11",
-    styleCode: "NXT-2026-KD",
-    styleName: "Kids Denim Shorts",
-    buyer: "Next",
-    orderQty: 9500,
-    fobPriceUsd: 6.5,
-    exchangeRate: 84.2,
-    actualCogs: 478,
-    budgetedMarginPct: 15.0,
-    varianceReason: "On-budget performance across all cost heads",
-  },
-  {
-    id: "12",
-    styleCode: "PRM-2026-SW",
-    styleName: "Men's Sweatshirt",
-    buyer: "Primark",
-    orderQty: 11000,
-    fobPriceUsd: 9.0,
-    exchangeRate: 84.2,
-    actualCogs: 695,
-    budgetedMarginPct: 20.0,
-    varianceReason: "Fleece fabric shortage led to costly alternate supplier",
-  },
-  {
-    id: "13",
-    styleCode: "HM-2026-LSH",
-    styleName: "Ladies Summer Shirt",
-    buyer: "H&M",
-    orderQty: 6800,
-    fobPriceUsd: 7.2,
-    exchangeRate: 84.2,
-    actualCogs: 560,
-    budgetedMarginPct: 13.0,
-    varianceReason: "Print registration issues added rework cost of 1.8%",
-  },
-  {
-    id: "14",
-    styleCode: "ASO-2026-TP",
-    styleName: "Tie-Dye Print Tee",
-    buyer: "ASOS",
-    orderQty: 4000,
-    fobPriceUsd: 11.5,
-    exchangeRate: 84.2,
-    actualCogs: 895,
-    budgetedMarginPct: 22.0,
-    varianceReason: "Complex dyeing process, 3 lab dip rejections before approval",
-  },
-  {
-    id: "15",
-    styleCode: "LDL-2026-CG",
-    styleName: "Children's Cargo Pants",
-    buyer: "Lidl",
-    orderQty: 14000,
-    fobPriceUsd: 5.8,
-    exchangeRate: 84.2,
-    actualCogs: 465,
-    budgetedMarginPct: 10.0,
-    varianceReason: "Excess inventory of matching fabric reused effectively",
-  },
-];
-
-// Compute derived metrics
 interface ComputedStyle {
   id: string;
   styleCode: string;
@@ -247,54 +54,6 @@ interface ComputedStyle {
   totalRevenue: number;
   totalProfit: number;
 }
-
-function computeStyles(rows: StyleRow[]): ComputedStyle[] {
-  return rows.map((s) => {
-    const fobPriceInr = Math.round(s.fobPriceUsd * s.exchangeRate);
-    const profitPerPiece = fobPriceInr - s.actualCogs;
-    const actualMarginPct = (profitPerPiece / fobPriceInr) * 100;
-    const variancePct = actualMarginPct - s.budgetedMarginPct;
-
-    let status: ComputedStyle["status"];
-    if (actualMarginPct >= 15) status = "profitable";
-    else if (actualMarginPct >= 5) status = "breakeven";
-    else status = "loss";
-
-    return {
-      ...s,
-      fobPriceInr,
-      profitPerPiece,
-      actualMarginPct,
-      variancePct,
-      status,
-      totalRevenue: fobPriceInr * s.orderQty,
-      totalProfit: profitPerPiece * s.orderQty,
-    };
-  });
-}
-
-const MOCK_STYLES = computeStyles(RAW_STYLES);
-
-// Top 10 styles for margin comparison bar chart
-const TOP10_MARGIN_CHART = MOCK_STYLES.slice()
-  .sort((a, b) => b.actualMarginPct - a.actualMarginPct)
-  .slice(0, 10)
-  .map((s) => ({
-    name: s.styleCode.split("-").slice(-1)[0],
-    fullName: s.styleName,
-    budgeted: Number(s.budgetedMarginPct.toFixed(1)),
-    actual: Number(s.actualMarginPct.toFixed(1)),
-    variance: Number(s.variancePct.toFixed(1)),
-  }));
-
-// Scatter chart data
-const SCATTER_DATA = MOCK_STYLES.map((s) => ({
-  qty: s.orderQty,
-  margin: Number(s.actualMarginPct.toFixed(1)),
-  revenue: s.totalRevenue / 100000, // in lakhs
-  name: s.styleCode,
-  buyer: s.buyer,
-}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -336,10 +95,15 @@ const BUYER_COLORS: Record<string, string> = {
   Tesco: "#14b8a6",
 };
 
+function getBuyerColor(buyer: string): string {
+  return BUYER_COLORS[buyer] ?? "#6b7280";
+}
+
 // Custom scatter tooltip
 function ScatterTooltip({ active, payload }: {
   active?: boolean;
-  payload?: Array<{ payload: typeof SCATTER_DATA[0] }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: Array<{ payload: any }>;
 }) {
   if (!active || !payload || !payload[0]) return null;
   const d = payload[0].payload;
@@ -349,7 +113,7 @@ function ScatterTooltip({ active, payload }: {
       <p className="text-gray-500">Buyer: <span className="font-medium text-gray-700">{d.buyer}</span></p>
       <p className="text-gray-500">Qty: <span className="font-medium text-gray-700">{d.qty.toLocaleString()} pcs</span></p>
       <p className="text-gray-500">Margin: <span className="font-medium text-green-700">{d.margin}%</span></p>
-      <p className="text-gray-500">Revenue: <span className="font-medium text-gray-700">₹{d.revenue.toFixed(1)}L</span></p>
+      <p className="text-gray-500">Revenue: <span className="font-medium text-gray-700">{d.revenue.toFixed(1)}L</span></p>
     </div>
   );
 }
@@ -361,11 +125,10 @@ function MarginTooltip({ active, payload, label }: {
   label?: string;
 }) {
   if (!active || !payload) return null;
-  const style = TOP10_MARGIN_CHART.find((s) => s.name === label);
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-xs max-w-[200px]">
       <p className="font-semibold text-gray-700 mb-1.5 leading-tight">
-        {style?.fullName ?? label}
+        {label}
       </p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }} className="flex justify-between gap-3">
@@ -382,14 +145,92 @@ function MarginTooltip({ active, payload, label }: {
 // ---------------------------------------------------------------------------
 
 export default function StyleProfitabilityPage() {
+  const { companyId } = useCompany();
+  const [styles, setStyles] = React.useState<ComputedStyle[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [activeDateRange, setActiveDateRange] = React.useState("Last 6 Months");
   const [sortBy, setSortBy] = React.useState<"margin" | "qty" | "revenue">("margin");
   const [filterBuyer, setFilterBuyer] = React.useState("All");
 
-  const buyers = ["All", ...Array.from(new Set(MOCK_STYLES.map((s) => s.buyer))).sort()];
+  const fetchProfitability = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getStyleProfitability(companyId);
+      if (error) {
+        toast.error("Failed to load profitability data");
+        return;
+      }
+      if (!data || data.length === 0) {
+        setStyles([]);
+        return;
+      }
+
+      // Map cost_sheets with joined products and sales_orders to ComputedStyle
+      const computed: ComputedStyle[] = data.map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (cs: any) => {
+          const product = cs.products;
+          const order = cs.sales_orders;
+          const styleCode = product?.style_code ?? cs.cs_number;
+          const styleName = product?.name ?? "Unknown Product";
+          const buyer = "Buyer"; // cost_sheets don't have buyer_id directly
+
+          const exchangeRate = Number(cs.exchange_rate) || 83.5;
+          const fobPriceUsd = Number(cs.fob_price_usd) || Number(cs.fob_price) || 0;
+          const fobPriceInr = Math.round(fobPriceUsd * exchangeRate);
+          const totalCost = Number(cs.total_cost) || 0;
+          const orderQty = order?.total_quantity ?? 1;
+
+          const profitPerPiece = fobPriceInr - totalCost;
+          const actualMarginPct = fobPriceInr > 0 ? (profitPerPiece / fobPriceInr) * 100 : 0;
+          const budgetedMarginPct = Number(cs.profit_percent) || 10;
+          const variancePct = actualMarginPct - budgetedMarginPct;
+
+          let status: ComputedStyle["status"];
+          if (actualMarginPct >= 15) status = "profitable";
+          else if (actualMarginPct >= 5) status = "breakeven";
+          else status = "loss";
+
+          return {
+            id: cs.id,
+            styleCode,
+            styleName,
+            buyer,
+            orderQty,
+            fobPriceUsd,
+            fobPriceInr,
+            actualCogs: totalCost,
+            profitPerPiece,
+            actualMarginPct,
+            budgetedMarginPct,
+            variancePct,
+            status,
+            varianceReason: "",
+            totalRevenue: fobPriceInr * orderQty,
+            totalProfit: profitPerPiece * orderQty,
+          };
+        }
+      );
+
+      setStyles(computed);
+    } catch {
+      toast.error("Failed to load profitability data");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchProfitability();
+  }, [fetchProfitability]);
+
+  const buyers = React.useMemo(
+    () => ["All", ...Array.from(new Set(styles.map((s) => s.buyer))).sort()],
+    [styles]
+  );
 
   const filtered = React.useMemo(() => {
-    let data = [...MOCK_STYLES];
+    let data = [...styles];
     if (filterBuyer !== "All") {
       data = data.filter((s) => s.buyer === filterBuyer);
     }
@@ -397,12 +238,45 @@ export default function StyleProfitabilityPage() {
     else if (sortBy === "qty") data.sort((a, b) => b.orderQty - a.orderQty);
     else data.sort((a, b) => b.totalRevenue - a.totalRevenue);
     return data;
-  }, [sortBy, filterBuyer]);
+  }, [styles, sortBy, filterBuyer]);
 
-  const profitableCount = MOCK_STYLES.filter((s) => s.status === "profitable").length;
-  const lossCount = MOCK_STYLES.filter((s) => s.status === "loss").length;
-  const avgMargin = MOCK_STYLES.reduce((s, st) => s + st.actualMarginPct, 0) / MOCK_STYLES.length;
-  const bestStyle = [...MOCK_STYLES].sort((a, b) => b.actualMarginPct - a.actualMarginPct)[0];
+  const profitableCount = styles.filter((s) => s.status === "profitable").length;
+  const lossCount = styles.filter((s) => s.status === "loss").length;
+  const avgMargin = styles.length > 0 ? styles.reduce((s, st) => s + st.actualMarginPct, 0) / styles.length : 0;
+  const bestStyle = styles.length > 0 ? [...styles].sort((a, b) => b.actualMarginPct - a.actualMarginPct)[0] : null;
+
+  // Top 10 styles for margin comparison bar chart
+  const top10MarginChart = React.useMemo(() => {
+    return [...styles]
+      .sort((a, b) => b.actualMarginPct - a.actualMarginPct)
+      .slice(0, 10)
+      .map((s) => ({
+        name: s.styleCode.length > 10 ? s.styleCode.slice(-6) : s.styleCode,
+        fullName: s.styleName,
+        budgeted: Number(s.budgetedMarginPct.toFixed(1)),
+        actual: Number(s.actualMarginPct.toFixed(1)),
+        variance: Number(s.variancePct.toFixed(1)),
+      }));
+  }, [styles]);
+
+  // Scatter chart data
+  const scatterData = React.useMemo(() => {
+    return styles.map((s) => ({
+      qty: s.orderQty,
+      margin: Number(s.actualMarginPct.toFixed(1)),
+      revenue: s.totalRevenue / 100000,
+      name: s.styleCode,
+      buyer: s.buyer,
+    }));
+  }, [styles]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -439,7 +313,7 @@ export default function StyleProfitabilityPage() {
         {[
           {
             title: "Styles Analyzed",
-            value: MOCK_STYLES.length,
+            value: styles.length,
             sub: `${activeDateRange}`,
             icon: BarChart3,
             color: "text-blue-600",
@@ -448,8 +322,8 @@ export default function StyleProfitabilityPage() {
           },
           {
             title: "Best Margin Style",
-            value: bestStyle.styleCode,
-            sub: `${bestStyle.actualMarginPct.toFixed(1)}% - ${bestStyle.buyer}`,
+            value: bestStyle?.styleCode ?? "--",
+            sub: bestStyle ? `${bestStyle.actualMarginPct.toFixed(1)}% - ${bestStyle.buyer}` : "No data",
             icon: TrendingUp,
             color: "text-green-600",
             bg: "bg-green-50",
@@ -518,51 +392,57 @@ export default function StyleProfitabilityPage() {
             <CardTitle className="text-base">Budgeted vs Actual Margin - Top 10 Styles</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={TOP10_MARGIN_CHART} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 10 }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => `${v}%`}
-                  tickLine={false}
-                  domain={[0, 35]}
-                />
-                <Tooltip content={<MarginTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <ReferenceLine y={15} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: "Target 15%", fontSize: 10, fill: "#16a34a" }} />
-                <Bar
-                  dataKey="budgeted"
-                  fill="#e5e7eb"
-                  radius={[4, 4, 0, 0]}
-                  name="Budgeted"
-                  maxBarSize={28}
-                />
-                <Bar
-                  dataKey="actual"
-                  radius={[4, 4, 0, 0]}
-                  name="Actual"
-                  maxBarSize={28}
-                >
-                  {TOP10_MARGIN_CHART.map((entry, index) => (
-                    <rect
-                      key={`rect-${index}`}
-                      fill={
-                        entry.actual >= entry.budgeted
-                          ? "#22c55e"
-                          : entry.actual >= 15
-                          ? "#3b82f6"
-                          : "#ef4444"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {top10MarginChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={top10MarginChart} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => `${v}%`}
+                    tickLine={false}
+                    domain={[0, 35]}
+                  />
+                  <Tooltip content={<MarginTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine y={15} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: "Target 15%", fontSize: 10, fill: "#16a34a" }} />
+                  <Bar
+                    dataKey="budgeted"
+                    fill="#e5e7eb"
+                    radius={[4, 4, 0, 0]}
+                    name="Budgeted"
+                    maxBarSize={28}
+                  />
+                  <Bar
+                    dataKey="actual"
+                    radius={[4, 4, 0, 0]}
+                    name="Actual"
+                    maxBarSize={28}
+                  >
+                    {top10MarginChart.map((entry, index) => (
+                      <rect
+                        key={`rect-${index}`}
+                        fill={
+                          entry.actual >= entry.budgeted
+                            ? "#22c55e"
+                            : entry.actual >= 15
+                            ? "#3b82f6"
+                            : "#ef4444"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[280px] text-gray-400 text-sm">
+                No approved cost sheets found
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -572,52 +452,59 @@ export default function StyleProfitabilityPage() {
             <CardTitle className="text-base">Qty vs Margin (bubble = revenue)</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  type="number"
-                  dataKey="qty"
-                  name="Order Qty"
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
-                  tickLine={false}
-                  label={{ value: "Order Qty", position: "insideBottom", offset: -2, fontSize: 10, fill: "#9ca3af" }}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="margin"
-                  name="Margin"
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v) => `${v}%`}
-                  tickLine={false}
-                  domain={[0, 35]}
-                />
-                <ZAxis
-                  type="number"
-                  dataKey="revenue"
-                  range={[60, 400]}
-                  name="Revenue (L)"
-                />
-                <Tooltip content={<ScatterTooltip />} />
-                <ReferenceLine y={15} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1.5} />
-                <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
-                {Object.entries(BUYER_COLORS).map(([buyer, color]) => {
-                  const data = SCATTER_DATA.filter((d) => d.buyer === buyer);
-                  if (!data.length) return null;
-                  return (
-                    <Scatter
-                      key={buyer}
-                      name={buyer}
-                      data={data}
-                      fill={color}
-                      fillOpacity={0.7}
-                    />
-                  );
-                })}
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-              </ScatterChart>
-            </ResponsiveContainer>
+            {scatterData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    type="number"
+                    dataKey="qty"
+                    name="Order Qty"
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
+                    tickLine={false}
+                    label={{ value: "Order Qty", position: "insideBottom", offset: -2, fontSize: 10, fill: "#9ca3af" }}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="margin"
+                    name="Margin"
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(v) => `${v}%`}
+                    tickLine={false}
+                    domain={[0, 35]}
+                  />
+                  <ZAxis
+                    type="number"
+                    dataKey="revenue"
+                    range={[60, 400]}
+                    name="Revenue (L)"
+                  />
+                  <Tooltip content={<ScatterTooltip />} />
+                  <ReferenceLine y={15} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1.5} />
+                  <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
+                  {/* Group by buyer */}
+                  {Array.from(new Set(scatterData.map((d) => d.buyer))).map((buyer) => {
+                    const data = scatterData.filter((d) => d.buyer === buyer);
+                    if (!data.length) return null;
+                    return (
+                      <Scatter
+                        key={buyer}
+                        name={buyer}
+                        data={data}
+                        fill={getBuyerColor(buyer)}
+                        fillOpacity={0.7}
+                      />
+                    );
+                  })}
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                </ScatterChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[280px] text-gray-400 text-sm">
+                No data available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -723,16 +610,18 @@ export default function StyleProfitabilityPage() {
                         <span className="text-sm font-medium text-gray-800 block truncate">
                           {style.styleName}
                         </span>
-                        <span className="text-[11px] text-gray-400 block truncate leading-tight">
-                          {style.varianceReason}
-                        </span>
+                        {style.varianceReason && (
+                          <span className="text-[11px] text-gray-400 block truncate leading-tight">
+                            {style.varianceReason}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className="inline-block rounded-md px-2 py-0.5 text-xs font-medium"
                           style={{
-                            backgroundColor: `${BUYER_COLORS[style.buyer]}15`,
-                            color: BUYER_COLORS[style.buyer],
+                            backgroundColor: `${getBuyerColor(style.buyer)}15`,
+                            color: getBuyerColor(style.buyer),
                           }}
                         >
                           {style.buyer}
@@ -742,10 +631,10 @@ export default function StyleProfitabilityPage() {
                         {style.orderQty.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-700 text-sm">
-                        ₹{style.fobPriceInr.toLocaleString("en-IN")}
+                        {style.fobPriceInr.toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-gray-600 text-sm">
-                        ₹{style.actualCogs.toLocaleString("en-IN")}
+                        {style.actualCogs.toLocaleString("en-IN")}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-semibold text-sm">
                         <span
@@ -755,7 +644,7 @@ export default function StyleProfitabilityPage() {
                               : "text-red-600"
                           }
                         >
-                          ₹{Math.round(style.profitPerPiece).toLocaleString("en-IN")}
+                          {Math.round(style.profitPerPiece).toLocaleString("en-IN")}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -814,15 +703,19 @@ export default function StyleProfitabilityPage() {
                   </td>
                   <td colSpan={2} />
                   <td className="px-4 py-3 text-right font-bold text-green-700 text-sm tabular-nums">
-                    ₹{Math.round(
-                      filtered.reduce((s, x) => s + x.profitPerPiece, 0) / filtered.length
-                    ).toLocaleString("en-IN")} avg
+                    {filtered.length > 0
+                      ? `${Math.round(
+                          filtered.reduce((s, x) => s + x.profitPerPiece, 0) / filtered.length
+                        ).toLocaleString("en-IN")} avg`
+                      : "--"}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="inline-flex items-center justify-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700 min-w-[48px]">
-                      {(
-                        filtered.reduce((s, x) => s + x.actualMarginPct, 0) / filtered.length
-                      ).toFixed(1)}%
+                      {filtered.length > 0
+                        ? (
+                            filtered.reduce((s, x) => s + x.actualMarginPct, 0) / filtered.length
+                          ).toFixed(1)
+                        : "0.0"}%
                     </span>
                   </td>
                   <td colSpan={2} />
@@ -844,9 +737,14 @@ export default function StyleProfitabilityPage() {
               <div>
                 <p className="text-sm font-semibold text-green-800">Top Performer</p>
                 <p className="text-xs text-green-700 mt-1 leading-relaxed">
-                  <span className="font-medium">{bestStyle.styleCode}</span> for {bestStyle.buyer} achieved{" "}
-                  {bestStyle.actualMarginPct.toFixed(1)}% margin vs {bestStyle.budgetedMarginPct}% budget.{" "}
-                  {bestStyle.varianceReason}
+                  {bestStyle ? (
+                    <>
+                      <span className="font-medium">{bestStyle.styleCode}</span> for {bestStyle.buyer} achieved{" "}
+                      {bestStyle.actualMarginPct.toFixed(1)}% margin vs {bestStyle.budgetedMarginPct}% budget.
+                    </>
+                  ) : (
+                    "No data available yet. Approve cost sheets to see profitability insights."
+                  )}
                 </p>
               </div>
             </div>
@@ -862,8 +760,8 @@ export default function StyleProfitabilityPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-800">Margin Erosion Alert</p>
                 <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                  {MOCK_STYLES.filter((s) => s.variancePct < -2).length} styles are underperforming
-                  budget by over 2%. Key drivers: yarn price spike, denim shrinkage, and fleece shortage.
+                  {styles.filter((s) => s.variancePct < -2).length} styles are underperforming
+                  budget by over 2%. Review cost breakdowns for corrective action.
                 </p>
               </div>
             </div>
@@ -879,8 +777,9 @@ export default function StyleProfitabilityPage() {
               <div>
                 <p className="text-sm font-semibold text-blue-800">Revenue vs Margin</p>
                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                  High-volume styles (TSC Basic Tee, HM Kids Tee) contribute most revenue but show
-                  lower margins. Premium styles (ASOS Hoodie, Zara Knitwear) drive margin efficiency.
+                  {styles.length > 0
+                    ? `Analyzing ${styles.length} styles. Average margin: ${avgMargin.toFixed(1)}%. High-volume styles may show lower margins while premium styles drive margin efficiency.`
+                    : "No data available. Create and approve cost sheets to generate profitability analysis."}
                 </p>
               </div>
             </div>

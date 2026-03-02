@@ -13,6 +13,7 @@ import {
   Plus,
   Eye,
   Pencil,
+  Loader2,
 } from "lucide-react";
 
 import { cn, formatDate, getDaysRemaining } from "@/lib/utils";
@@ -21,113 +22,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/data-table/data-table";
 import { createActionsColumn } from "@/components/data-table/columns";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { useCompany } from "@/contexts/company-context";
+import { getOrders } from "@/lib/actions/orders";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 interface Order {
   id: string;
-  orderNumber: string;
-  buyer: string;
-  style: string;
-  qty: number;
-  fobPrice: number;
+  order_number: string;
+  buyer_name: string;
+  product_name: string;
+  total_quantity: number;
+  fob_price: number;
   currency: string;
-  deliveryDate: string;
+  delivery_date: string;
   status: string;
 }
-
-const MOCK_ORDERS: Order[] = [
-  {
-    id: "1",
-    orderNumber: "ORD-2026-0012",
-    buyer: "H&M",
-    style: "Men's Woven Shirt",
-    qty: 12000,
-    fobPrice: 8.5,
-    currency: "USD",
-    deliveryDate: "2026-03-05",
-    status: "in_production",
-  },
-  {
-    id: "2",
-    orderNumber: "ORD-2026-0013",
-    buyer: "Zara",
-    style: "Women's Knitwear",
-    qty: 8500,
-    fobPrice: 12.0,
-    currency: "USD",
-    deliveryDate: "2026-03-15",
-    status: "confirmed",
-  },
-  {
-    id: "3",
-    orderNumber: "ORD-2026-0014",
-    buyer: "Marks & Spencer",
-    style: "Kids T-Shirt",
-    qty: 25000,
-    fobPrice: 4.75,
-    currency: "USD",
-    deliveryDate: "2026-03-22",
-    status: "in_production",
-  },
-  {
-    id: "4",
-    orderNumber: "ORD-2026-0011",
-    buyer: "Primark",
-    style: "Denim Jeans",
-    qty: 6000,
-    fobPrice: 15.0,
-    currency: "USD",
-    deliveryDate: "2026-03-02",
-    status: "quality_check",
-  },
-  {
-    id: "5",
-    orderNumber: "ORD-2026-0015",
-    buyer: "Next",
-    style: "Ladies Blouse",
-    qty: 4500,
-    fobPrice: 9.25,
-    currency: "USD",
-    deliveryDate: "2026-04-10",
-    status: "confirmed",
-  },
-  {
-    id: "6",
-    orderNumber: "ORD-2026-0010",
-    buyer: "Lidl",
-    style: "Sports Polo",
-    qty: 18000,
-    fobPrice: 5.5,
-    currency: "USD",
-    deliveryDate: "2026-02-28",
-    status: "ready_to_ship",
-  },
-  {
-    id: "7",
-    orderNumber: "ORD-2026-0016",
-    buyer: "ASOS",
-    style: "Casual Hoodie",
-    qty: 3200,
-    fobPrice: 22.0,
-    currency: "USD",
-    deliveryDate: "2026-04-25",
-    status: "draft",
-  },
-  {
-    id: "8",
-    orderNumber: "ORD-2026-0009",
-    buyer: "Tesco",
-    style: "Basic Tee",
-    qty: 30000,
-    fobPrice: 3.25,
-    currency: "USD",
-    deliveryDate: "2026-02-20",
-    status: "shipped",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Stats computation
@@ -137,30 +50,18 @@ function computeStats(orders: Order[]) {
   const active = orders.filter(
     (o) => !["shipped", "delivered", "cancelled"].includes(o.status)
   );
-  const totalValue = active.reduce((sum, o) => sum + o.qty * o.fobPrice, 0);
+  const totalValue = active.reduce((sum, o) => sum + o.total_quantity * o.fob_price, 0);
   const now = new Date();
   const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const shippingThisWeek = active.filter((o) => {
-    const d = new Date(o.deliveryDate);
+    const d = new Date(o.delivery_date);
     return d >= now && d <= nextWeek;
   }).length;
-  const atRisk = active.filter((o) => getDaysRemaining(o.deliveryDate) < 7).length;
-  const onTime = active.filter((o) => getDaysRemaining(o.deliveryDate) >= 0).length;
+  const atRisk = active.filter((o) => getDaysRemaining(o.delivery_date) < 7).length;
+  const onTime = active.filter((o) => getDaysRemaining(o.delivery_date) >= 0).length;
   const onTimePct = active.length > 0 ? Math.round((onTime / active.length) * 100) : 100;
 
   return { active: active.length, totalValue, shippingThisWeek, atRisk, onTimePct };
-}
-
-// ---------------------------------------------------------------------------
-// Row urgency colour helper
-// ---------------------------------------------------------------------------
-
-function getRowClassName(deliveryDate: string): string {
-  const days = getDaysRemaining(deliveryDate);
-  if (days < 0) return "bg-red-50/60 hover:bg-red-50";
-  if (days < 7) return "bg-red-50/40 hover:bg-red-50/80";
-  if (days <= 15) return "bg-yellow-50/40 hover:bg-yellow-50/80";
-  return "hover:bg-blue-50/40";
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +71,7 @@ function getRowClassName(deliveryDate: string): string {
 function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Order>[] {
   return [
     {
-      accessorKey: "orderNumber",
+      accessorKey: "order_number",
       header: "Order #",
       cell: ({ row }) => (
         <Link
@@ -178,52 +79,52 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Order>[] 
           className="font-mono text-sm font-semibold text-blue-600 hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
-          {row.original.orderNumber}
+          {row.original.order_number}
         </Link>
       ),
     },
     {
-      accessorKey: "buyer",
+      accessorKey: "buyer_name",
       header: "Buyer",
       cell: ({ row }) => (
         <span className="text-sm font-medium text-gray-900">
-          {row.original.buyer}
+          {row.original.buyer_name}
         </span>
       ),
     },
     {
-      accessorKey: "style",
+      accessorKey: "product_name",
       header: "Style",
       cell: ({ row }) => (
         <span className="text-sm text-gray-600 max-w-[180px] truncate block">
-          {row.original.style}
+          {row.original.product_name}
         </span>
       ),
     },
     {
-      accessorKey: "qty",
+      accessorKey: "total_quantity",
       header: "Qty",
       cell: ({ row }) => (
         <span className="tabular-nums text-sm font-medium">
-          {row.original.qty.toLocaleString()}
+          {row.original.total_quantity.toLocaleString()}
         </span>
       ),
     },
     {
-      accessorKey: "fobPrice",
+      accessorKey: "fob_price",
       header: "FOB Price",
       cell: ({ row }) => (
         <span className="tabular-nums text-sm font-medium">
-          {row.original.currency} {row.original.fobPrice.toFixed(2)}
+          {row.original.currency} {Number(row.original.fob_price).toFixed(2)}
         </span>
       ),
     },
     {
-      accessorKey: "deliveryDate",
+      accessorKey: "delivery_date",
       header: "Delivery Date",
       cell: ({ row }) => (
         <span className="text-sm whitespace-nowrap">
-          {formatDate(row.original.deliveryDate)}
+          {formatDate(row.original.delivery_date)}
         </span>
       ),
     },
@@ -231,7 +132,7 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Order>[] 
       id: "daysRemaining",
       header: "Days Left",
       cell: ({ row }) => {
-        const days = getDaysRemaining(row.original.deliveryDate);
+        const days = getDaysRemaining(row.original.delivery_date);
         return (
           <span
             className={cn(
@@ -278,8 +179,49 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Order>[] 
 
 export default function OrdersPage() {
   const router = useRouter();
-  const stats = computeStats(MOCK_ORDERS);
+  const { companyId } = useCompany();
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const fetchOrders = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getOrders(companyId);
+      if (error) {
+        toast.error("Failed to load orders");
+        return;
+      }
+      const mapped: Order[] = (data ?? []).map((o: Record<string, unknown>) => ({
+        id: o.id as string,
+        order_number: o.order_number as string,
+        buyer_name: (o.buyers as Record<string, unknown>)?.name as string ?? "Unknown",
+        product_name: o.product_name as string,
+        total_quantity: o.total_quantity as number,
+        fob_price: o.fob_price as number,
+        currency: o.currency as string ?? "USD",
+        delivery_date: o.delivery_date as string,
+        status: o.status as string,
+      }));
+      setOrders(mapped);
+    } catch {
+      toast.error("Failed to load orders");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const stats = computeStats(orders);
   const columns = React.useMemo(() => buildColumns(router), [router]);
+
+  // Build buyer filter options from actual data
+  const buyerOptions = React.useMemo(() => {
+    const unique = [...new Set(orders.map((o) => o.buyer_name))].sort();
+    return unique.map((b) => ({ label: b, value: b }));
+  }, [orders]);
 
   const STAT_CARDS = [
     {
@@ -321,18 +263,9 @@ export default function OrdersPage() {
 
   const FILTERS = [
     {
-      key: "buyer",
+      key: "buyer_name",
       label: "Buyer",
-      options: [
-        { label: "H&M", value: "H&M" },
-        { label: "Zara", value: "Zara" },
-        { label: "Marks & Spencer", value: "Marks & Spencer" },
-        { label: "Primark", value: "Primark" },
-        { label: "Next", value: "Next" },
-        { label: "Lidl", value: "Lidl" },
-        { label: "ASOS", value: "ASOS" },
-        { label: "Tesco", value: "Tesco" },
-      ],
+      options: buyerOptions,
     },
     {
       key: "status",
@@ -403,8 +336,9 @@ export default function OrdersPage() {
           <div className="p-4 border-b border-gray-100">
             <DataTable
               columns={columns}
-              data={MOCK_ORDERS}
-              searchKey="orderNumber"
+              data={orders}
+              loading={loading}
+              searchKey="order_number"
               searchPlaceholder="Search by order number..."
               filters={FILTERS}
               onRowClick={(row) => router.push(`/orders/${row.id}`)}

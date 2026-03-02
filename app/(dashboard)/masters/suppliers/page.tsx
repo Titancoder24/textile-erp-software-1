@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge"
 import { DataTable } from "@/components/data-table/data-table"
 import { FormSheet } from "@/components/forms/form-sheet"
 import { SupplierForm } from "@/components/forms/masters/supplier-form"
+import { useCompany } from "@/contexts/company-context"
+import { getSuppliers, deleteSupplier } from "@/lib/actions/suppliers"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,72 +35,6 @@ import type { Database } from "@/types/database"
 
 type Supplier = Database["public"]["Tables"]["suppliers"]["Row"]
 
-const MOCK_SUPPLIERS: Supplier[] = [
-  {
-    id: "s1",
-    company_id: "c1",
-    name: "Arvind Limited",
-    code: "ARV",
-    contact_person: "Raj Patel",
-    email: "sourcing@arvind.com",
-    phone: "+91 79 4000 8000",
-    address: "Naroda Road",
-    city: "Ahmedabad",
-    country: "India",
-    material_types: ["fabric", "yarn"],
-    payment_terms: "30 days",
-    avg_lead_time_days: 21,
-    gst_number: "24AACCA7024N1ZW",
-    bank_details: null,
-    rating: 4,
-    is_active: true,
-    created_at: "2024-01-10T10:00:00Z",
-    updated_at: "2024-01-10T10:00:00Z",
-  },
-  {
-    id: "s2",
-    company_id: "c1",
-    name: "YKK India Pvt Ltd",
-    code: "YKK",
-    contact_person: "Sanjay Mehta",
-    email: "india@ykk.com",
-    phone: "+91 22 6600 0000",
-    address: "Marol Industrial Area",
-    city: "Mumbai",
-    country: "India",
-    material_types: ["trim", "accessory"],
-    payment_terms: "45 days",
-    avg_lead_time_days: 7,
-    gst_number: "27AABCY1234A1ZZ",
-    bank_details: null,
-    rating: 5,
-    is_active: true,
-    created_at: "2024-02-05T10:00:00Z",
-    updated_at: "2024-02-05T10:00:00Z",
-  },
-  {
-    id: "s3",
-    company_id: "c1",
-    name: "Huntsman Corporation",
-    code: "HNT",
-    contact_person: "Wei Zhang",
-    email: "sales@huntsman.com",
-    phone: "+86 21 5884 0000",
-    address: "Pudong New District",
-    city: "Shanghai",
-    country: "China",
-    material_types: ["chemical"],
-    payment_terms: "60 days",
-    avg_lead_time_days: 14,
-    gst_number: null,
-    bank_details: null,
-    rating: 3,
-    is_active: false,
-    created_at: "2024-03-20T10:00:00Z",
-    updated_at: "2024-03-20T10:00:00Z",
-  },
-]
-
 function RatingStars({ rating }: { rating: number | null }) {
   if (rating === null) return <span className="text-gray-400 text-sm">—</span>
   return (
@@ -111,6 +47,7 @@ function RatingStars({ rating }: { rating: number | null }) {
 
 export default function SuppliersPage() {
   const router = useRouter()
+  const { companyId } = useCompany()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -120,14 +57,18 @@ export default function SuppliersPage() {
   const fetchSuppliers = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 400))
-      setSuppliers(MOCK_SUPPLIERS)
+      const { data, error } = await getSuppliers(companyId)
+      if (error) {
+        toast.error("Failed to load suppliers")
+        return
+      }
+      setSuppliers(data ?? [])
     } catch {
       toast.error("Failed to load suppliers")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchSuppliers()
@@ -160,7 +101,11 @@ export default function SuppliersPage() {
   async function handleDelete() {
     if (!deletingSupplier) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteSupplier(deletingSupplier.id)
+      if (error) {
+        toast.error("Failed to delete supplier")
+        return
+      }
       setSuppliers((prev) => prev.filter((s) => s.id !== deletingSupplier.id))
       toast.success("Supplier deleted successfully")
     } catch {
@@ -353,6 +298,7 @@ export default function SuppliersPage() {
       >
         <SupplierForm
           supplier={editingSupplier}
+          companyId={companyId}
           onSuccess={handleSuccess}
           onCancel={() => {
             setOpen(false)

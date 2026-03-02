@@ -8,7 +8,11 @@ import { toast } from "sonner";
 
 import { cn, formatDate } from "@/lib/utils";
 import { SAMPLE_TYPES, SAMPLE_TYPE_LABELS } from "@/lib/constants";
-import { createClient } from "@/lib/supabase/client";
+import { useCompany } from "@/contexts/company-context";
+import { getSamples, createSample } from "@/lib/actions/samples";
+import { getBuyers } from "@/lib/actions/buyers";
+import { getProducts } from "@/lib/actions/masters";
+import { getOrders } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,101 +57,21 @@ interface Sample {
   submittedDate?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data (fallback when supabase returns nothing)
-// ---------------------------------------------------------------------------
+interface BuyerOption {
+  id: string;
+  name: string;
+}
 
-const MOCK_SAMPLES: Sample[] = [
-  {
-    id: "1",
-    sampleNumber: "SMP-2026-0032",
-    buyer: "H&M",
-    buyerId: "b1",
-    product: "Men's Woven Shirt",
-    productId: "p1",
-    sampleType: "fit_sample",
-    colors: ["Navy", "White"],
-    status: "approved",
-    requiredDate: "2026-02-10",
-    submittedDate: "2026-02-08",
-  },
-  {
-    id: "2",
-    sampleNumber: "SMP-2026-0033",
-    buyer: "Zara",
-    buyerId: "b2",
-    product: "Women's Knitwear",
-    productId: "p2",
-    sampleType: "lab_dip",
-    colors: ["Red", "Burgundy", "Pink"],
-    status: "submitted",
-    requiredDate: "2026-02-18",
-    submittedDate: "2026-02-15",
-  },
-  {
-    id: "3",
-    sampleNumber: "SMP-2026-0034",
-    buyer: "Marks & Spencer",
-    buyerId: "b3",
-    product: "Kids T-Shirt",
-    productId: "p3",
-    sampleType: "size_set",
-    colors: ["Yellow", "Blue"],
-    status: "in_development",
-    requiredDate: "2026-03-01",
-  },
-  {
-    id: "4",
-    sampleNumber: "SMP-2026-0035",
-    buyer: "Next",
-    buyerId: "b4",
-    product: "Ladies Blouse",
-    productId: "p4",
-    sampleType: "pre_production",
-    colors: ["White", "Ivory"],
-    status: "requested",
-    requiredDate: "2026-03-10",
-  },
-  {
-    id: "5",
-    sampleNumber: "SMP-2026-0036",
-    buyer: "Primark",
-    buyerId: "b5",
-    product: "Denim Jeans",
-    productId: "p5",
-    sampleType: "strike_off",
-    colors: ["Indigo"],
-    status: "rejected",
-    requiredDate: "2026-02-05",
-    submittedDate: "2026-02-04",
-  },
-  {
-    id: "6",
-    sampleNumber: "SMP-2026-0037",
-    buyer: "ASOS",
-    buyerId: "b6",
-    product: "Casual Hoodie",
-    productId: "p6",
-    sampleType: "production",
-    colors: ["Black", "Grey"],
-    status: "revised",
-    requiredDate: "2026-02-20",
-    submittedDate: "2026-02-22",
-  },
-  {
-    id: "7",
-    sampleNumber: "SMP-2026-0038",
-    buyer: "Tesco",
-    buyerId: "b7",
-    product: "Basic Tee",
-    productId: "p7",
-    sampleType: "photo",
-    colors: ["White"],
-    status: "approved",
-    requiredDate: "2026-02-12",
-    submittedDate: "2026-02-11",
-  },
-];
+interface ProductOption {
+  id: string;
+  name: string;
+  style_code: string;
+}
+
+interface OrderOption {
+  id: string;
+  order_number: string;
+}
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -172,27 +96,6 @@ const SAMPLE_TYPE_BADGE_COLORS: Record<string, string> = {
   shipment: "bg-gray-100 text-gray-600 border border-gray-200",
   photo: "bg-pink-50 text-pink-700 border border-pink-200",
 };
-
-const BUYERS_LIST = [
-  "H&M",
-  "Zara",
-  "Marks & Spencer",
-  "Primark",
-  "Next",
-  "Lidl",
-  "ASOS",
-  "Tesco",
-];
-const PRODUCTS_LIST = [
-  "Men's Woven Shirt",
-  "Women's Knitwear",
-  "Kids T-Shirt",
-  "Denim Jeans",
-  "Ladies Blouse",
-  "Sports Polo",
-  "Casual Hoodie",
-  "Basic Tee",
-];
 
 // ---------------------------------------------------------------------------
 // Columns
@@ -305,9 +208,15 @@ function buildColumns(
 
 export default function SamplesPage() {
   const router = useRouter();
+  const { companyId, userId } = useCompany();
   const [samples, setSamples] = React.useState<Sample[]>([]);
   const [loading, setLoading] = React.useState(true);
   const columns = React.useMemo(() => buildColumns(router), [router]);
+
+  // Lookup data for the form
+  const [buyers, setBuyers] = React.useState<BuyerOption[]>([]);
+  const [products, setProducts] = React.useState<ProductOption[]>([]);
+  const [orders, setOrders] = React.useState<OrderOption[]>([]);
 
   // FormSheet state
   const [sheetOpen, setSheetOpen] = React.useState(false);
@@ -322,43 +231,85 @@ export default function SamplesPage() {
     special_instructions: "",
   });
 
-  // Fetch samples from supabase, fall back to mock
-  React.useEffect(() => {
-    async function fetchSamples() {
-      setLoading(true);
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("samples")
-          .select("*, buyers(name)")
-          .order("created_at", { ascending: false });
-
-        if (error || !data || data.length === 0) {
-          setSamples(MOCK_SAMPLES);
-        } else {
-          const mapped: Sample[] = data.map((s: any) => ({
-            id: s.id,
-            sampleNumber: s.sample_number,
-            buyer: s.buyers?.name ?? "Unknown",
-            buyerId: s.buyer_id,
-            product: s.product_id ?? "N/A",
-            productId: s.product_id ?? "",
-            sampleType: s.sample_type,
-            colors: s.colors ?? [],
-            status: s.status as SampleStatus,
-            requiredDate: s.required_date ?? "",
-            submittedDate: s.submitted_date ?? undefined,
-          }));
-          setSamples(mapped);
-        }
-      } catch {
-        setSamples(MOCK_SAMPLES);
-      } finally {
-        setLoading(false);
+  // Fetch samples from Supabase
+  const fetchSamples = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getSamples(companyId);
+      if (error) {
+        toast.error("Failed to load samples");
+        return;
       }
+      const mapped: Sample[] = (data ?? []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        sampleNumber: s.sample_number as string,
+        buyer:
+          (s.buyers as Record<string, unknown>)?.name as string ?? "Unknown",
+        buyerId: s.buyer_id as string,
+        product:
+          (s.products as Record<string, unknown>)?.name as string ??
+          (s.products as Record<string, unknown>)?.style_code as string ??
+          "N/A",
+        productId: (s.product_id as string) ?? "",
+        sampleType: s.sample_type as string,
+        colors: (s.colors as string[]) ?? [],
+        status: s.status as SampleStatus,
+        requiredDate: (s.required_date as string) ?? "",
+        submittedDate: (s.submitted_date as string) ?? undefined,
+      }));
+      setSamples(mapped);
+    } catch {
+      toast.error("Failed to load samples");
+    } finally {
+      setLoading(false);
     }
+  }, [companyId]);
+
+  // Fetch lookup data for the form (buyers, products, orders)
+  const fetchLookups = React.useCallback(async () => {
+    try {
+      const [buyersRes, productsRes, ordersRes] = await Promise.all([
+        getBuyers(companyId),
+        getProducts(companyId),
+        getOrders(companyId),
+      ]);
+
+      if (buyersRes.data) {
+        setBuyers(
+          buyersRes.data.map((b: Record<string, unknown>) => ({
+            id: b.id as string,
+            name: b.name as string,
+          }))
+        );
+      }
+
+      if (productsRes.data) {
+        setProducts(
+          productsRes.data.map((p: Record<string, unknown>) => ({
+            id: p.id as string,
+            name: p.name as string,
+            style_code: p.style_code as string,
+          }))
+        );
+      }
+
+      if (ordersRes.data) {
+        setOrders(
+          ordersRes.data.map((o: Record<string, unknown>) => ({
+            id: o.id as string,
+            order_number: o.order_number as string,
+          }))
+        );
+      }
+    } catch {
+      // Silently fail for lookups - form will just have empty dropdowns
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
     fetchSamples();
-  }, []);
+    fetchLookups();
+  }, [fetchSamples, fetchLookups]);
 
   function handleFormChange(field: string, value: string) {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -371,7 +322,23 @@ export default function SamplesPage() {
     }
     setSaving(true);
     try {
-      await new Promise((r) => setTimeout(r, 800));
+      const { error } = await createSample({
+        company_id: companyId,
+        buyer_id: formData.buyer,
+        product_id: formData.product || null,
+        order_id: formData.order || null,
+        sample_type: formData.sample_type,
+        quantity: formData.quantity ? parseInt(formData.quantity, 10) : 1,
+        required_date: formData.required_date,
+        special_instructions: formData.special_instructions || null,
+        created_by: userId,
+      });
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
       toast.success("Sample request created successfully");
       setSheetOpen(false);
       setFormData({
@@ -383,6 +350,7 @@ export default function SamplesPage() {
         required_date: "",
         special_instructions: "",
       });
+      fetchSamples();
     } catch {
       toast.error("Failed to create sample request");
     } finally {
@@ -459,9 +427,9 @@ export default function SamplesPage() {
                 <SelectValue placeholder="Select buyer..." />
               </SelectTrigger>
               <SelectContent>
-                {BUYERS_LIST.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
+                {buyers.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -478,9 +446,9 @@ export default function SamplesPage() {
                 <SelectValue placeholder="Select product..." />
               </SelectTrigger>
               <SelectContent>
-                {PRODUCTS_LIST.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
+                {products.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.style_code})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -497,9 +465,11 @@ export default function SamplesPage() {
                 <SelectValue placeholder="Select order..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ORD-2026-0012">ORD-2026-0012</SelectItem>
-                <SelectItem value="ORD-2026-0013">ORD-2026-0013</SelectItem>
-                <SelectItem value="ORD-2026-0014">ORD-2026-0014</SelectItem>
+                {orders.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.order_number}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

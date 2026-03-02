@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createTrim, updateTrim } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Trim = Database["public"]["Tables"]["trims"]["Row"]
@@ -54,11 +55,12 @@ type TrimFormValues = z.infer<typeof trimSchema>
 
 interface TrimFormProps {
   trim?: Trim | null
+  companyId: string
   onSuccess: (trim: Trim) => void
   onCancel?: () => void
 }
 
-export function TrimForm({ trim, onSuccess, onCancel }: TrimFormProps) {
+export function TrimForm({ trim, companyId, onSuccess, onCancel }: TrimFormProps) {
   const isEdit = !!trim
 
   const {
@@ -69,7 +71,8 @@ export function TrimForm({ trim, onSuccess, onCancel }: TrimFormProps) {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<TrimFormValues>({
-    resolver: zodResolver(trimSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(trimSchema) as any,
     defaultValues: {
       name: "",
       code: "",
@@ -103,27 +106,30 @@ export function TrimForm({ trim, onSuccess, onCancel }: TrimFormProps) {
 
   async function onSubmit(values: TrimFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Trim = {
-        id: trim?.id ?? crypto.randomUUID(),
-        company_id: trim?.company_id ?? "",
-        created_at: trim?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        supplier_id: values.supplier_id || null,
+      const payload = {
         name: values.name,
         code: values.code,
         trim_type: values.trim_type,
         description: values.description || null,
         uom: values.uom,
         rate: values.rate,
+        supplier_id: values.supplier_id || null,
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Trim updated" : "Trim created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save trim.")
+      if (isEdit && trim) {
+        const { data: result, error } = await updateTrim(trim.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Trim updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createTrim({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Trim created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save trim.")
     }
   }
 

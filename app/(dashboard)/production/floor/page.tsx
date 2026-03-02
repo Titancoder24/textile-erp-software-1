@@ -10,6 +10,7 @@ import {
   Users,
   Clock,
   Target,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -20,6 +21,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
@@ -32,141 +34,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { LineCard, type LineData } from "@/components/production/line-card";
+import { useCompany } from "@/contexts/company-context";
+import { getFloorDashboardData } from "@/lib/actions/production";
 
 // ---------------------------------------------------------------------------
-// Demo data -- in production this comes from getFloorDashboardData()
+// Helpers
 // ---------------------------------------------------------------------------
-
-const MOCK_LINES: LineData[] = [
-  {
-    id: "line-1",
-    name: "Line 1 - Main Sewing",
-    status: "running",
-    currentOrder: "ORD-2401",
-    buyerName: "H&M",
-    style: "Classic Polo Shirt",
-    todayTarget: 800,
-    todayProduced: 620,
-    efficiency: 78,
-    operatorsPresent: 32,
-    operatorsTotal: 35,
-    defectsToday: 8,
-    hoursRemaining: 3,
-    hourlyOutput: [72, 78, 65, 80, 76, 82, 75, 70],
-  },
-  {
-    id: "line-2",
-    name: "Line 2 - Ladies Tops",
-    status: "running",
-    currentOrder: "ORD-2398",
-    buyerName: "Zara",
-    style: "Linen Blouse",
-    todayTarget: 600,
-    todayProduced: 390,
-    efficiency: 65,
-    operatorsPresent: 28,
-    operatorsTotal: 30,
-    defectsToday: 12,
-    hoursRemaining: 3,
-    hourlyOutput: [55, 60, 48, 52, 58, 62, 55],
-  },
-  {
-    id: "line-3",
-    name: "Line 3 - Kids Wear",
-    status: "running",
-    currentOrder: "ORD-2395",
-    buyerName: "Next",
-    style: "Kids T-Shirt Set",
-    todayTarget: 1000,
-    todayProduced: 820,
-    efficiency: 82,
-    operatorsPresent: 30,
-    operatorsTotal: 30,
-    defectsToday: 5,
-    hoursRemaining: 2,
-    hourlyOutput: [100, 105, 95, 110, 108, 102, 100, 100],
-  },
-  {
-    id: "line-4",
-    name: "Line 4 - Denim",
-    status: "running",
-    currentOrder: "ORD-2402",
-    buyerName: "Primark",
-    style: "Slim Fit Jeans",
-    todayTarget: 500,
-    todayProduced: 275,
-    efficiency: 55,
-    operatorsPresent: 25,
-    operatorsTotal: 28,
-    defectsToday: 18,
-    hoursRemaining: 4,
-    hourlyOutput: [35, 40, 38, 42, 40, 38, 42],
-  },
-  {
-    id: "line-5",
-    name: "Line 5 - Outerwear",
-    status: "running",
-    currentOrder: "ORD-2400",
-    buyerName: "M&S",
-    style: "Quilted Jacket",
-    todayTarget: 400,
-    todayProduced: 285,
-    efficiency: 71,
-    operatorsPresent: 22,
-    operatorsTotal: 25,
-    defectsToday: 6,
-    hoursRemaining: 3,
-    hourlyOutput: [38, 40, 35, 42, 38, 45, 47],
-  },
-  {
-    id: "line-6",
-    name: "Line 6 - Knits",
-    status: "idle",
-    currentOrder: "ORD-2403",
-    buyerName: "C&A",
-    style: "Crew Neck Sweater",
-    todayTarget: 600,
-    todayProduced: 120,
-    efficiency: 42,
-    operatorsPresent: 15,
-    operatorsTotal: 30,
-    defectsToday: 22,
-    hoursRemaining: 6,
-    hourlyOutput: [35, 40, 25, 20],
-  },
-  {
-    id: "line-7",
-    name: "Line 7 - Finishing",
-    status: "running",
-    currentOrder: "ORD-2399",
-    buyerName: "Gap",
-    style: "Chino Trousers",
-    todayTarget: 700,
-    todayProduced: 616,
-    efficiency: 88,
-    operatorsPresent: 20,
-    operatorsTotal: 20,
-    defectsToday: 3,
-    hoursRemaining: 2,
-    hourlyOutput: [80, 78, 75, 82, 80, 78, 76, 67],
-  },
-  {
-    id: "line-8",
-    name: "Line 8 - Sportswear",
-    status: "breakdown",
-    currentOrder: "ORD-2404",
-    buyerName: "Decathlon",
-    style: "Dry-Fit T-Shirt",
-    todayTarget: 900,
-    todayProduced: 210,
-    efficiency: 35,
-    operatorsPresent: 10,
-    operatorsTotal: 35,
-    defectsToday: 15,
-    hoursRemaining: 5,
-    hourlyOutput: [60, 65, 45, 40],
-  },
-];
 
 function buildHourlyChartData(line: LineData) {
   return line.hourlyOutput.map((val, idx) => ({
@@ -180,23 +53,66 @@ function buildHourlyChartData(line: LineData) {
 // ---------------------------------------------------------------------------
 
 export default function FloorDashboardPage() {
-  const [lines] = React.useState<LineData[]>(MOCK_LINES);
+  const { companyId } = useCompany();
+  const [lines, setLines] = React.useState<LineData[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [selectedLine, setSelectedLine] = React.useState<LineData | null>(null);
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
   const [refreshing, setRefreshing] = React.useState(false);
 
+  const fetchData = React.useCallback(async () => {
+    const { data, error } = await getFloorDashboardData(companyId);
+    if (error) {
+      toast.error("Failed to load floor data: " + error);
+    } else if (data) {
+      const mapped: LineData[] = data.map(
+        (line: Record<string, unknown>) => {
+          const status: LineData["status"] =
+            (line.efficiency as number) > 0
+              ? "running"
+              : line.current_order_id
+              ? "idle"
+              : "idle";
+
+          return {
+            id: line.line_id as string,
+            name: line.line_name as string,
+            status,
+            currentOrder: (line.current_order_number as string) || undefined,
+            buyerName: (line.buyer_name as string) || undefined,
+            style: (line.product_name as string) || undefined,
+            todayTarget: (line.today_target as number) || 0,
+            todayProduced: (line.today_produced as number) || 0,
+            efficiency: (line.efficiency as number) || 0,
+            operatorsPresent: (line.operators_present as number) || 0,
+            operatorsTotal: (line.total_operators as number) || 30,
+            defectsToday: (line.today_defects as number) || 0,
+            hoursRemaining: (line.hours_remaining as number) || 0,
+            hourlyOutput: (line.hourly_output as number[]) || [],
+          };
+        }
+      );
+      setLines(mapped);
+    }
+    setLastRefresh(new Date());
+    setLoading(false);
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   // Auto-refresh every 60s
   React.useEffect(() => {
     const interval = setInterval(() => {
-      setLastRefresh(new Date());
+      fetchData();
     }, 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setLastRefresh(new Date());
+    await fetchData();
     setRefreshing(false);
   };
 
@@ -213,6 +129,24 @@ export default function FloorDashboardPage() {
     totalProduced > 0
       ? Math.round((totalDefects / totalProduced) * 100 * 10) / 10
       : 0;
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title="Live Floor Dashboard"
+          description="Real-time production line monitoring. Auto-refreshes every 60 seconds."
+          breadcrumb={[
+            { label: "Production", href: "/production" },
+            { label: "Floor Dashboard" },
+          ]}
+        />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -315,6 +249,19 @@ export default function FloorDashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Empty state */}
+      {lines.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <Factory className="mx-auto h-12 w-12 text-gray-300" />
+            <p className="mt-3 text-sm text-gray-500">
+              No production lines configured. Add production lines to see floor
+              data.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Line Cards Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -459,48 +406,50 @@ export default function FloorDashboardPage() {
                 </div>
 
                 {/* Hourly Output Bar Chart */}
-                <div>
-                  <h3 className="mb-3 text-sm font-semibold text-gray-900">
-                    Hourly Output
-                  </h3>
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart
-                        data={buildHourlyChartData(selectedLine)}
-                        barCategoryGap="20%"
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="#f0f0f0"
-                        />
-                        <XAxis
-                          dataKey="hour"
-                          tick={{ fontSize: 11, fill: "#9ca3af" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11, fill: "#9ca3af" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            fontSize: 12,
-                            borderRadius: 8,
-                            border: "1px solid #e5e7eb",
-                          }}
-                        />
-                        <Bar
-                          dataKey="output"
-                          fill="#3b82f6"
-                          radius={[4, 4, 0, 0]}
-                          name="Output"
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                {selectedLine.hourlyOutput.length > 0 && (
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-gray-900">
+                      Hourly Output
+                    </h3>
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart
+                          data={buildHourlyChartData(selectedLine)}
+                          barCategoryGap="20%"
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#f0f0f0"
+                          />
+                          <XAxis
+                            dataKey="hour"
+                            tick={{ fontSize: 11, fill: "#9ca3af" }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: "#9ca3af" }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              fontSize: 12,
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                            }}
+                          />
+                          <Bar
+                            dataKey="output"
+                            fill="#3b82f6"
+                            radius={[4, 4, 0, 0]}
+                            name="Output"
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Operator Stats */}
                 <div>
@@ -514,11 +463,13 @@ export default function FloorDashboardPage() {
                     </p>
                     <p className="mt-1 text-xs text-gray-400">
                       Attendance:{" "}
-                      {Math.round(
-                        (selectedLine.operatorsPresent /
-                          selectedLine.operatorsTotal) *
-                          100
-                      )}
+                      {selectedLine.operatorsTotal > 0
+                        ? Math.round(
+                            (selectedLine.operatorsPresent /
+                              selectedLine.operatorsTotal) *
+                              100
+                          )
+                        : 0}
                       %
                     </p>
                   </div>

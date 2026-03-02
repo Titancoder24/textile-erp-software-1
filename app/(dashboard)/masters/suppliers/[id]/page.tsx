@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Pencil, Mail, Phone, MapPin, Star } from "lucide-react"
 import { toast } from "sonner"
@@ -14,30 +14,17 @@ import { FormSheet } from "@/components/forms/form-sheet"
 import { SupplierForm } from "@/components/forms/masters/supplier-form"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatCard } from "@/components/ui/stat-card"
+import { getSupplier } from "@/lib/actions/suppliers"
+import { useCompany } from "@/contexts/company-context"
 import type { Database } from "@/types/database"
 
 type Supplier = Database["public"]["Tables"]["suppliers"]["Row"]
 
-const MOCK_SUPPLIER: Supplier = {
-  id: "s1",
-  company_id: "c1",
-  name: "Arvind Limited",
-  code: "ARV",
-  contact_person: "Raj Patel",
-  email: "sourcing@arvind.com",
-  phone: "+91 79 4000 8000",
-  address: "Naroda Road, Naroda",
-  city: "Ahmedabad",
-  country: "India",
-  material_types: ["fabric", "yarn"],
-  payment_terms: "30 days",
-  avg_lead_time_days: 21,
-  gst_number: "24AACCA7024N1ZW",
-  bank_details: null,
-  rating: 4,
-  is_active: true,
-  created_at: "2024-01-10T10:00:00Z",
-  updated_at: "2024-01-10T10:00:00Z",
+interface SupplierScorecard {
+  total_purchase_orders: number
+  total_grns: number
+  total_spend: number
+  rating: number | null
 }
 
 function InfoRow({
@@ -63,27 +50,55 @@ function InfoRow({
   )
 }
 
+function formatCurrency(amount: number): string {
+  if (amount >= 10000000) return `${(amount / 10000000).toFixed(1)} Cr`
+  if (amount >= 100000) return `${(amount / 100000).toFixed(1)} L`
+  if (amount >= 1000) return `${(amount / 1000).toFixed(1)} K`
+  return amount.toLocaleString("en-IN")
+}
+
 export default function SupplierDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { companyId } = useCompany()
   const [supplier, setSupplier] = useState<Supplier | null>(null)
+  const [scorecard, setScorecard] = useState<SupplierScorecard>({
+    total_purchase_orders: 0,
+    total_grns: 0,
+    total_spend: 0,
+    rating: null,
+  })
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      try {
-        await new Promise((r) => setTimeout(r, 400))
-        setSupplier(MOCK_SUPPLIER)
-      } catch {
-        toast.error("Failed to load supplier")
-      } finally {
-        setLoading(false)
+  const supplierId = params.id as string
+
+  const loadSupplier = useCallback(async () => {
+    if (!supplierId) return
+    setLoading(true)
+    try {
+      const { data, error } = await getSupplier(supplierId)
+      if (error || !data) {
+        toast.error(error || "Failed to load supplier")
+        setSupplier(null)
+        return
       }
+
+      // Extract scorecard from the response
+      const { scorecard: sc, ...supplierData } = data
+      setSupplier(supplierData as Supplier)
+      setScorecard(sc)
+    } catch {
+      toast.error("Failed to load supplier")
+      setSupplier(null)
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [params.id])
+  }, [supplierId])
+
+  useEffect(() => {
+    loadSupplier()
+  }, [loadSupplier])
 
   if (loading) {
     return (
@@ -200,7 +215,7 @@ export default function SupplierDetailPage() {
                   label="GST Number"
                   value={supplier.gst_number}
                 />
-                {supplier.avg_lead_time_days !== undefined && (
+                {supplier.avg_lead_time_days !== undefined && supplier.avg_lead_time_days !== null && (
                   <div className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
                       <Star className="h-4 w-4" />
@@ -241,19 +256,23 @@ export default function SupplierDetailPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-500">Total POs</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm font-semibold text-gray-900">{scorecard.total_purchase_orders}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-sm text-gray-500">Open POs</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm text-gray-500">Total GRNs</span>
+                      <span className="text-sm font-semibold text-gray-900">{scorecard.total_grns}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                      <span className="text-sm text-gray-500">GRNs (30 days)</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm text-gray-500">Total Spend</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {scorecard.total_spend > 0 ? `INR ${formatCurrency(scorecard.total_spend)}` : "---"}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center py-2">
-                      <span className="text-sm text-gray-500">Quality Issues</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm text-gray-500">Rating</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {scorecard.rating ? `${scorecard.rating}/5` : "---"}
+                      </span>
                     </div>
                   </div>
                 </CardContent>
@@ -286,26 +305,26 @@ export default function SupplierDetailPage() {
         <TabsContent value="scorecard" className="mt-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              title="Price Competitiveness"
-              value="—"
+              title="Total POs"
+              value={String(scorecard.total_purchase_orders)}
               icon={<Star className="h-5 w-5" />}
               color="blue"
             />
             <StatCard
-              title="Delivery Reliability"
-              value="—"
+              title="Total GRNs"
+              value={String(scorecard.total_grns)}
               icon={<Star className="h-5 w-5" />}
               color="green"
             />
             <StatCard
-              title="Quality Score"
-              value="—"
+              title="Total Spend"
+              value={scorecard.total_spend > 0 ? `INR ${formatCurrency(scorecard.total_spend)}` : "---"}
               icon={<Star className="h-5 w-5" />}
               color="purple"
             />
             <StatCard
               title="Lead Time"
-              value={`${supplier.avg_lead_time_days} days`}
+              value={supplier.avg_lead_time_days ? `${supplier.avg_lead_time_days} days` : "---"}
               icon={<Star className="h-5 w-5" />}
               color="orange"
             />
@@ -328,6 +347,7 @@ export default function SupplierDetailPage() {
         footer={null}
       >
         <SupplierForm
+          companyId={companyId}
           supplier={supplier}
           onSuccess={(updated) => {
             setSupplier(updated)

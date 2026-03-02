@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getColors, deleteColor } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table/data-table"
@@ -31,18 +33,8 @@ import type { Database } from "@/types/database"
 
 type Color = Database["public"]["Tables"]["colors"]["Row"]
 
-const MOCK_COLORS: Color[] = [
-  { id: "col1", company_id: "c1", name: "Royal Blue", code: "RBLUE", pantone_ref: "Pantone 286 C", hex_code: "#2563EB", created_at: "2024-01-01T00:00:00Z" },
-  { id: "col2", company_id: "c1", name: "Scarlet Red", code: "SRED", pantone_ref: "Pantone 1797 C", hex_code: "#DC2626", created_at: "2024-01-02T00:00:00Z" },
-  { id: "col3", company_id: "c1", name: "Forest Green", code: "FGRN", pantone_ref: "Pantone 357 C", hex_code: "#16A34A", created_at: "2024-01-03T00:00:00Z" },
-  { id: "col4", company_id: "c1", name: "Ivory White", code: "IVWH", pantone_ref: "Pantone 9141 C", hex_code: "#FAFAF9", created_at: "2024-01-04T00:00:00Z" },
-  { id: "col5", company_id: "c1", name: "Charcoal Grey", code: "CGRY", pantone_ref: "Pantone 431 C", hex_code: "#374151", created_at: "2024-01-05T00:00:00Z" },
-  { id: "col6", company_id: "c1", name: "Sunflower Yellow", code: "SYEL", pantone_ref: "Pantone 012 C", hex_code: "#EAB308", created_at: "2024-01-06T00:00:00Z" },
-  { id: "col7", company_id: "c1", name: "Dusty Pink", code: "DPNK", pantone_ref: "Pantone 210 C", hex_code: "#F9A8D4", created_at: "2024-01-07T00:00:00Z" },
-  { id: "col8", company_id: "c1", name: "Navy", code: "NAVY", pantone_ref: "Pantone 289 C", hex_code: "#1E3A5F", created_at: "2024-01-08T00:00:00Z" },
-]
-
 export default function ColorsPage() {
+  const { companyId } = useCompany()
   const [colors, setColors] = useState<Color[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -52,14 +44,18 @@ export default function ColorsPage() {
   const fetchColors = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setColors(MOCK_COLORS)
+      const { data, error } = await getColors(companyId)
+      if (error) {
+        toast.error("Failed to load colors")
+        return
+      }
+      setColors(data ?? [])
     } catch {
       toast.error("Failed to load colors")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchColors()
@@ -92,7 +88,11 @@ export default function ColorsPage() {
   async function handleDelete() {
     if (!deletingColor) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteColor(deletingColor.id)
+      if (error) {
+        toast.error("Failed to delete color")
+        return
+      }
       setColors((prev) => prev.filter((c) => c.id !== deletingColor.id))
       toast.success("Color deleted")
     } catch {
@@ -211,6 +211,7 @@ export default function ColorsPage() {
         footer={null}
       >
         <ColorForm
+          companyId={companyId}
           color={editingColor}
           onSuccess={handleSuccess}
           onCancel={() => {

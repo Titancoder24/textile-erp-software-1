@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Calendar } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -20,6 +20,13 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { FormSheet } from "@/components/forms/form-sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useCompany } from "@/contexts/company-context";
+import {
+  getWorkOrders,
+  createWorkOrder,
+  getOrdersForWorkOrder,
+  getProductionLines,
+} from "@/lib/actions/production";
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -40,41 +47,21 @@ type WorkOrder = {
   endDate: string;
 };
 
+type OrderOption = {
+  id: string;
+  order_number: string;
+  product_name: string;
+  total_quantity: number;
+};
+
 const WO_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  planned: { label: "Planned", color: "gray" },
   not_started: { label: "Not Started", color: "gray" },
   in_progress: { label: "In Progress", color: "blue" },
   completed: { label: "Completed", color: "green" },
   on_hold: { label: "On Hold", color: "yellow" },
   cancelled: { label: "Cancelled", color: "red" },
 };
-
-const DEMO_WORK_ORDERS: WorkOrder[] = [
-  { id: "1", woNumber: "WO-2026-0051", orderNumber: "ORD-2401", product: "Classic Polo Shirt", totalQty: 10000, produced: 6200, defective: 80, status: "in_progress", percentComplete: 62, line: "Line 1", startDate: "2026-02-15", endDate: "2026-03-15" },
-  { id: "2", woNumber: "WO-2026-0052", orderNumber: "ORD-2398", product: "Linen Blouse", totalQty: 6000, produced: 3900, defective: 120, status: "in_progress", percentComplete: 65, line: "Line 2", startDate: "2026-02-18", endDate: "2026-03-18" },
-  { id: "3", woNumber: "WO-2026-0053", orderNumber: "ORD-2395", product: "Kids T-Shirt Set", totalQty: 12000, produced: 9840, defective: 50, status: "in_progress", percentComplete: 82, line: "Line 3", startDate: "2026-02-10", endDate: "2026-03-10" },
-  { id: "4", woNumber: "WO-2026-0054", orderNumber: "ORD-2402", product: "Slim Fit Jeans", totalQty: 4000, produced: 2200, defective: 180, status: "in_progress", percentComplete: 55, line: "Line 4", startDate: "2026-02-20", endDate: "2026-03-20" },
-  { id: "5", woNumber: "WO-2026-0055", orderNumber: "ORD-2400", product: "Quilted Jacket", totalQty: 3000, produced: 2130, defective: 60, status: "in_progress", percentComplete: 71, line: "Line 5", startDate: "2026-02-12", endDate: "2026-03-12" },
-  { id: "6", woNumber: "WO-2026-0056", orderNumber: "ORD-2403", product: "Crew Neck Sweater", totalQty: 5000, produced: 600, defective: 220, status: "on_hold", percentComplete: 12, line: "Line 6", startDate: "2026-02-22", endDate: "2026-03-22" },
-  { id: "7", woNumber: "WO-2026-0057", orderNumber: "ORD-2399", product: "Chino Trousers", totalQty: 7000, produced: 6160, defective: 30, status: "in_progress", percentComplete: 88, line: "Line 7", startDate: "2026-02-08", endDate: "2026-03-08" },
-  { id: "8", woNumber: "WO-2026-0058", orderNumber: "ORD-2404", product: "Dry-Fit T-Shirt", totalQty: 9000, produced: 2100, defective: 150, status: "in_progress", percentComplete: 23, line: "Line 8", startDate: "2026-02-25", endDate: "2026-03-25" },
-];
-
-const ORDERS_FOR_WO = [
-  { id: "o1", orderNumber: "ORD-2410", product: "Basic Tee", qty: 5000 },
-  { id: "o2", orderNumber: "ORD-2411", product: "Cargo Pants", qty: 3000 },
-  { id: "o3", orderNumber: "ORD-2412", product: "Summer Dress", qty: 4000 },
-];
-
-const LINES = [
-  "Line 1",
-  "Line 2",
-  "Line 3",
-  "Line 4",
-  "Line 5",
-  "Line 6",
-  "Line 7",
-  "Line 8",
-];
 
 // ---------------------------------------------------------------------------
 // Column definitions
@@ -177,9 +164,15 @@ const columns: ColumnDef<WorkOrder>[] = [
 // ---------------------------------------------------------------------------
 
 export default function WorkOrdersPage() {
-  const [workOrders, setWorkOrders] = React.useState(DEMO_WORK_ORDERS);
+  const { companyId, userId } = useCompany();
+  const [workOrders, setWorkOrders] = React.useState<WorkOrder[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+
+  // Dropdown data
+  const [ordersForWO, setOrdersForWO] = React.useState<OrderOption[]>([]);
+  const [lineNames, setLineNames] = React.useState<string[]>([]);
 
   const [form, setForm] = React.useState({
     orderId: "",
@@ -190,14 +183,65 @@ export default function WorkOrdersPage() {
     endDate: "",
   });
 
+  const fetchWorkOrders = React.useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await getWorkOrders(companyId);
+    if (error) {
+      toast.error("Failed to load work orders: " + error);
+    } else if (data) {
+      const mapped: WorkOrder[] = data.map((wo: Record<string, unknown>) => {
+        const totalQty = (wo.total_quantity as number) || 0;
+        const produced = (wo.good_output as number) || 0;
+        const defective = (wo.defective_output as number) || 0;
+        const pct = totalQty > 0 ? Math.round((produced / totalQty) * 100) : 0;
+        const order = wo.sales_orders as Record<string, unknown> | null;
+        return {
+          id: wo.id as string,
+          woNumber: wo.wo_number as string,
+          orderNumber: order?.order_number as string ?? "-",
+          product: wo.product_name as string,
+          totalQty,
+          produced,
+          defective,
+          status: wo.status as string,
+          percentComplete: pct,
+          line: (wo.production_line as string) || "-",
+          startDate: (wo.planned_start_date as string) || "-",
+          endDate: (wo.planned_end_date as string) || "-",
+        };
+      });
+      setWorkOrders(mapped);
+    }
+    setLoading(false);
+  }, [companyId]);
+
+  const fetchDropdownData = React.useCallback(async () => {
+    const [ordersRes, linesRes] = await Promise.all([
+      getOrdersForWorkOrder(companyId),
+      getProductionLines(companyId),
+    ]);
+    if (ordersRes.data) {
+      setOrdersForWO(ordersRes.data as OrderOption[]);
+    }
+    if (linesRes.data) {
+      const names = (linesRes.data as Array<{ name: string }>).map((l) => l.name);
+      setLineNames(names);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchWorkOrders();
+    fetchDropdownData();
+  }, [fetchWorkOrders, fetchDropdownData]);
+
   const handleOrderSelect = (orderId: string) => {
-    const order = ORDERS_FOR_WO.find((o) => o.id === orderId);
+    const order = ordersForWO.find((o) => o.id === orderId);
     if (order) {
       setForm((prev) => ({
         ...prev,
         orderId,
-        product: order.product,
-        qty: String(order.qty),
+        product: order.product_name,
+        qty: String(order.total_quantity),
       }));
     }
   };
@@ -208,26 +252,31 @@ export default function WorkOrdersPage() {
       return;
     }
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
-    const newWO: WorkOrder = {
-      id: String(Date.now()),
-      woNumber: `WO-2026-${String(workOrders.length + 59).padStart(4, "0")}`,
-      orderNumber: ORDERS_FOR_WO.find((o) => o.id === form.orderId)?.orderNumber ?? "",
-      product: form.product,
-      totalQty: parseInt(form.qty) || 0,
-      produced: 0,
-      defective: 0,
-      status: "not_started",
-      percentComplete: 0,
-      line: form.line,
-      startDate: form.startDate,
-      endDate: form.endDate,
-    };
-    setWorkOrders((prev) => [newWO, ...prev]);
+
+    const { data, error } = await createWorkOrder({
+      company_id: companyId,
+      order_id: form.orderId,
+      product_id: null,
+      product_name: form.product,
+      bom_id: null,
+      total_quantity: parseInt(form.qty) || 0,
+      production_line: form.line,
+      planned_start_date: form.startDate,
+      planned_end_date: form.endDate || null,
+      status: "planned",
+      notes: null,
+      created_by: userId,
+    });
+
+    if (error) {
+      toast.error("Failed to create work order: " + error);
+    } else if (data) {
+      toast.success(`Work Order ${data.wo_number} created.`);
+      setSheetOpen(false);
+      setForm({ orderId: "", product: "", qty: "", line: "", startDate: "", endDate: "" });
+      fetchWorkOrders();
+    }
     setSaving(false);
-    setSheetOpen(false);
-    setForm({ orderId: "", product: "", qty: "", line: "", startDate: "", endDate: "" });
-    toast.success(`Work Order ${newWO.woNumber} created.`);
   };
 
   return (
@@ -244,6 +293,7 @@ export default function WorkOrdersPage() {
       <DataTable
         columns={columns}
         data={workOrders}
+        loading={loading}
         searchKey="woNumber"
         searchPlaceholder="Search work orders..."
         filters={[
@@ -284,9 +334,9 @@ export default function WorkOrdersPage() {
                 <SelectValue placeholder="Select order..." />
               </SelectTrigger>
               <SelectContent>
-                {ORDERS_FOR_WO.map((o) => (
+                {ordersForWO.map((o) => (
                   <SelectItem key={o.id} value={o.id}>
-                    {o.orderNumber} - {o.product}
+                    {o.order_number} - {o.product_name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -314,7 +364,7 @@ export default function WorkOrdersPage() {
                 <SelectValue placeholder="Assign line..." />
               </SelectTrigger>
               <SelectContent>
-                {LINES.map((l) => (
+                {lineNames.map((l) => (
                   <SelectItem key={l} value={l}>
                     {l}
                   </SelectItem>

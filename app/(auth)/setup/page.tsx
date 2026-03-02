@@ -54,15 +54,20 @@ type CompanyFormValues = z.infer<typeof companySchema>;
 type AdminFormValues = z.infer<typeof adminSchema>;
 
 const DEFAULT_NUMBER_SERIES = [
-  { prefix: "ORD", module: "orders", next_number: 1 },
-  { prefix: "INQ", module: "inquiries", next_number: 1 },
-  { prefix: "SMP", module: "samples", next_number: 1 },
-  { prefix: "LD", module: "lab_dips", next_number: 1 },
-  { prefix: "PO", module: "purchase_orders", next_number: 1 },
-  { prefix: "GRN", module: "grn", next_number: 1 },
-  { prefix: "WO", module: "work_orders", next_number: 1 },
-  { prefix: "QC", module: "quality_checks", next_number: 1 },
-  { prefix: "SHP", module: "shipments", next_number: 1 },
+  { prefix: "ORD", document_type: "sales_order", current_sequence: 0 },
+  { prefix: "INQ", document_type: "inquiry", current_sequence: 0 },
+  { prefix: "SMP", document_type: "sample", current_sequence: 0 },
+  { prefix: "LD", document_type: "lab_dip", current_sequence: 0 },
+  { prefix: "PO", document_type: "purchase_order", current_sequence: 0 },
+  { prefix: "GRN", document_type: "grn", current_sequence: 0 },
+  { prefix: "WO", document_type: "work_order", current_sequence: 0 },
+  { prefix: "QC", document_type: "inspection", current_sequence: 0 },
+  { prefix: "SHP", document_type: "shipment", current_sequence: 0 },
+  { prefix: "CS", document_type: "cost_sheet", current_sequence: 0 },
+  { prefix: "MR", document_type: "material_request", current_sequence: 0 },
+  { prefix: "CAP", document_type: "capa", current_sequence: 0 },
+  { prefix: "RCP", document_type: "recipe", current_sequence: 0 },
+  { prefix: "DYE", document_type: "dyeing_batch", current_sequence: 0 },
 ];
 
 export default function SetupPage() {
@@ -127,24 +132,24 @@ export default function SetupPage() {
 
       const userId = authData.user.id;
 
+      // Generate company ID to avoid RLS SELECT violation on RETURNING clause
+      const companyId = crypto.randomUUID();
+
       // Step 2: Insert company record
-      const { data: company, error: companyError } = await supabase
+      const { error: companyError } = await supabase
         .from("companies")
         .insert({
+          id: companyId,
           name: companyData.companyName,
           city: companyData.city,
           country: companyData.country,
           default_currency: "USD",
           financial_year_start: 1,
-        })
-        .select("id")
-        .single();
+        });
 
       if (companyError) {
         throw new Error("Failed to create company record: " + companyError.message);
       }
-
-      const companyId = company.id;
 
       // Step 3: Insert profile with super_admin role
       const { error: profileError } = await supabase.from("profiles").insert({
@@ -208,16 +213,14 @@ export default function SetupPage() {
         {/* Step indicator */}
         <div className="flex items-center gap-2 pt-2">
           <div
-            className={`flex items-center gap-1.5 text-xs font-medium ${
-              step >= 1 ? "text-blue-600" : "text-gray-400"
-            }`}
+            className={`flex items-center gap-1.5 text-xs font-medium ${step >= 1 ? "text-blue-600" : "text-gray-400"
+              }`}
           >
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step >= 1
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step >= 1
                   ? "bg-blue-600 text-white"
                   : "bg-gray-200 text-gray-500"
-              }`}
+                }`}
             >
               {step > 1 ? (
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -236,16 +239,14 @@ export default function SetupPage() {
           </div>
           <div className="flex-1 h-px bg-gray-200" />
           <div
-            className={`flex items-center gap-1.5 text-xs font-medium ${
-              step >= 2 ? "text-blue-600" : "text-gray-400"
-            }`}
+            className={`flex items-center gap-1.5 text-xs font-medium ${step >= 2 ? "text-blue-600" : "text-gray-400"
+              }`}
           >
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step >= 2
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step >= 2
                   ? "bg-blue-600 text-white"
                   : "bg-gray-200 text-gray-500"
-              }`}
+                }`}
             >
               2
             </div>

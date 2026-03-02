@@ -16,7 +16,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
-const ORDERS = [
+interface OrderStage {
+  key: string;
+  label: string;
+  done: boolean;
+  active?: boolean;
+  pct?: number;
+  date?: string;
+}
+
+const ORDERS: {
+  id: string;
+  product: string;
+  styleNo: string;
+  colors: string[];
+  sizes: string[];
+  quantity: number;
+  shipDate: string;
+  exFactoryDate: string;
+  status: string;
+  buyerPO?: string;
+  currentStage: string;
+  progress: number;
+  stages: OrderStage[];
+}[] = [
   {
     id: "SO-2026-0021",
     product: "Men's Classic T-Shirt",
@@ -312,7 +335,7 @@ export default function BuyerOrdersPage() {
       search === "" ||
       o.id.toLowerCase().includes(search.toLowerCase()) ||
       o.product.toLowerCase().includes(search.toLowerCase()) ||
-      o.buyerPO.toLowerCase().includes(search.toLowerCase());
+      (o.buyerPO ?? "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus =
       statusFilter === "all" || o.status === statusFilter;
     return matchesSearch && matchesStatus;

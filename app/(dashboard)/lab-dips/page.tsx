@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,11 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCompany } from "@/contexts/company-context";
+import { getLabDips, createLabDip } from "@/lib/actions/dyeing";
+import { getBuyers } from "@/lib/actions/buyers";
 
 /* ---------- Types ---------- */
 
 interface LabDip {
   id: string;
+  labDipNumber: string;
   order: string;
   buyer: string;
   color: string;
@@ -31,70 +36,12 @@ interface LabDip {
   approvalDate: string | null;
 }
 
-/* ---------- Mock data ---------- */
+interface BuyerOption {
+  id: string;
+  name: string;
+}
 
-const MOCK: LabDip[] = [
-  {
-    id: "LD-0041",
-    order: "ORD-2401",
-    buyer: "Zara International",
-    color: "Navy Blue 19-3832",
-    recipe: "RCP-0042",
-    submissionDate: "2026-02-20",
-    status: "approved",
-    approvalDate: "2026-02-22",
-  },
-  {
-    id: "LD-0042",
-    order: "ORD-2401",
-    buyer: "Zara International",
-    color: "Dusty Rose 14-1511",
-    recipe: "RCP-0051",
-    submissionDate: "2026-02-20",
-    status: "rejected",
-    approvalDate: "2026-02-23",
-  },
-  {
-    id: "LD-0043",
-    order: "ORD-2401",
-    buyer: "Zara International",
-    color: "Dusty Rose 14-1511 (Rev2)",
-    recipe: "RCP-0052",
-    submissionDate: "2026-02-24",
-    status: "submitted",
-    approvalDate: null,
-  },
-  {
-    id: "LD-0044",
-    order: "ORD-2398",
-    buyer: "H&M Group",
-    color: "Sage Green 16-0213",
-    recipe: "RCP-0038",
-    submissionDate: "2026-02-18",
-    status: "approved",
-    approvalDate: "2026-02-21",
-  },
-  {
-    id: "LD-0045",
-    order: "ORD-2405",
-    buyer: "Marks & Spencer",
-    color: "Sky Blue 14-4318",
-    recipe: "RCP-0033",
-    submissionDate: "2026-02-25",
-    status: "submitted",
-    approvalDate: null,
-  },
-  {
-    id: "LD-0046",
-    order: "ORD-2407",
-    buyer: "Gap Inc.",
-    color: "Off White 11-0601",
-    recipe: "RCP-0055",
-    submissionDate: null as unknown as string,
-    status: "pending",
-    approvalDate: null,
-  },
-];
+/* ---------- Status config ---------- */
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-gray-100 text-gray-600 border border-gray-200",
@@ -115,10 +62,10 @@ const STATUS_LABELS: Record<string, string> = {
 function buildColumns(): ColumnDef<LabDip>[] {
   return [
     {
-      accessorKey: "id",
+      accessorKey: "labDipNumber",
       header: "LD #",
       cell: ({ row }) => (
-        <span className="font-medium text-gray-900">{row.original.id}</span>
+        <span className="font-medium text-gray-900">{row.original.labDipNumber}</span>
       ),
     },
     { accessorKey: "order", header: "Order" },
@@ -127,14 +74,12 @@ function buildColumns(): ColumnDef<LabDip>[] {
     {
       accessorKey: "recipe",
       header: "Recipe",
-      cell: ({ row }) => (
-        <a
-          href={`/dyeing/recipes/${row.original.recipe}`}
-          className="text-blue-600 hover:underline text-sm"
-        >
-          {row.original.recipe}
-        </a>
-      ),
+      cell: ({ row }) =>
+        row.original.recipe ? (
+          <span className="text-blue-600 text-sm">{row.original.recipe}</span>
+        ) : (
+          "—"
+        ),
     },
     {
       accessorKey: "submissionDate",
@@ -162,72 +107,77 @@ function buildColumns(): ColumnDef<LabDip>[] {
 
 /* ---------- New Lab Dip Form ---------- */
 
-function NewLabDipForm() {
+function NewLabDipForm({
+  buyers,
+  formData,
+  setFormData,
+}: {
+  buyers: BuyerOption[];
+  formData: {
+    buyerId: string;
+    colorName: string;
+    submissionDate: string;
+    notes: string;
+  };
+  setFormData: React.Dispatch<
+    React.SetStateAction<{
+      buyerId: string;
+      colorName: string;
+      submissionDate: string;
+      notes: string;
+    }>
+  >;
+}) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2 space-y-1.5">
-          <Label>Order #</Label>
-          <Input placeholder="ORD-XXXX" />
-        </div>
-        <div className="col-span-2 space-y-1.5">
           <Label>Buyer</Label>
-          <Select>
+          <Select
+            value={formData.buyerId}
+            onValueChange={(v) => setFormData((prev) => ({ ...prev, buyerId: v }))}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select buyer" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="zara">Zara International</SelectItem>
-              <SelectItem value="hm">H&M Group</SelectItem>
-              <SelectItem value="ms">Marks & Spencer</SelectItem>
-              <SelectItem value="gap">Gap Inc.</SelectItem>
+              {buyers.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label>Color / Shade</Label>
-          <Input placeholder="e.g. Navy Blue 19-3832" />
-        </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>Reference Recipe</Label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select recipe (optional)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="RCP-0042">RCP-0042 — Navy Blue Standard</SelectItem>
-              <SelectItem value="RCP-0051">RCP-0051 — Dusty Rose Delicate</SelectItem>
-              <SelectItem value="RCP-0038">RCP-0038 — Sage Green Nature</SelectItem>
-              <SelectItem value="RCP-0055">RCP-0055 — Off White Premium</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            placeholder="e.g. Navy Blue 19-3832"
+            value={formData.colorName}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, colorName: e.target.value }))
+            }
+          />
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label>Target Submission Date</Label>
-          <Input type="date" />
-        </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>Fabric Type</Label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select fabric type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cotton">100% Cotton</SelectItem>
-              <SelectItem value="polycotton">Poly-Cotton</SelectItem>
-              <SelectItem value="viscose">Viscose</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="col-span-2 space-y-1.5">
-          <Label>Pantone Reference</Label>
-          <Input placeholder="e.g. 19-3832 TCX" />
+          <Input
+            type="date"
+            value={formData.submissionDate}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, submissionDate: e.target.value }))
+            }
+          />
         </div>
         <div className="col-span-2 space-y-1.5">
           <Label>Notes</Label>
           <textarea
             rows={3}
             placeholder="Special notes or requirements..."
+            value={formData.notes}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, notes: e.target.value }))
+            }
             className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
           />
         </div>
@@ -239,16 +189,106 @@ function NewLabDipForm() {
 /* ---------- Page ---------- */
 
 export default function LabDipsPage() {
+  const { companyId, userId } = useCompany();
   const [open, setOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [labDips, setLabDips] = React.useState<LabDip[]>([]);
+  const [buyers, setBuyers] = React.useState<BuyerOption[]>([]);
+  const [formData, setFormData] = React.useState({
+    buyerId: "",
+    colorName: "",
+    submissionDate: "",
+    notes: "",
+  });
 
   const columns = buildColumns();
 
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [labDipRes, buyerRes] = await Promise.all([
+        getLabDips(companyId),
+        getBuyers(companyId),
+      ]);
+
+      if (labDipRes.error) {
+        toast.error("Failed to load lab dips: " + labDipRes.error);
+      } else {
+        const mapped: LabDip[] = (labDipRes.data ?? []).map((ld: Record<string, unknown>) => {
+          const buyerObj = ld.buyers as Record<string, unknown> | null;
+          const recipeObj = ld.recipes as Record<string, unknown> | null;
+          const orderObj = ld.sales_orders as Record<string, unknown> | null;
+
+          return {
+            id: ld.id as string,
+            labDipNumber: ld.lab_dip_number as string,
+            order: (orderObj?.order_number as string) || "—",
+            buyer: (buyerObj?.name as string) || "—",
+            color: (ld.color_name as string) || "—",
+            recipe: (recipeObj?.recipe_number as string) || "",
+            submissionDate: (ld.submission_date as string) || "",
+            status: (ld.status as LabDip["status"]) || "pending",
+            approvalDate: (ld.approval_date as string) || null,
+          };
+        });
+        setLabDips(mapped);
+      }
+
+      if (buyerRes.error) {
+        toast.error("Failed to load buyers: " + buyerRes.error);
+      } else {
+        setBuyers(
+          (buyerRes.data ?? []).map((b: Record<string, unknown>) => ({
+            id: b.id as string,
+            name: b.name as string,
+          }))
+        );
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   const handleSave = async () => {
+    if (!formData.buyerId) {
+      toast.error("Please select a buyer");
+      return;
+    }
+    if (!formData.colorName) {
+      toast.error("Please enter a color name");
+      return;
+    }
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    setOpen(false);
+    try {
+      const result = await createLabDip({
+        company_id: companyId,
+        buyer_id: formData.buyerId,
+        color_name: formData.colorName,
+        submission_date: formData.submissionDate || undefined,
+        created_by: userId,
+      });
+
+      if (result.error) {
+        toast.error("Failed to create lab dip: " + result.error);
+      } else {
+        toast.success("Lab dip created successfully");
+        setOpen(false);
+        setFormData({ buyerId: "", colorName: "", submissionDate: "", notes: "" });
+        fetchData();
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -267,9 +307,10 @@ export default function LabDipsPage() {
 
       <DataTable
         columns={columns}
-        data={MOCK}
+        data={labDips}
         searchKey="color"
         searchPlaceholder="Search by color..."
+        loading={loading}
         filters={[
           {
             key: "status",
@@ -296,7 +337,11 @@ export default function LabDipsPage() {
         saveLabel="Create Lab Dip"
         size="md"
       >
-        <NewLabDipForm />
+        <NewLabDipForm
+          buyers={buyers}
+          formData={formData}
+          setFormData={setFormData}
+        />
       </FormSheet>
     </div>
   );

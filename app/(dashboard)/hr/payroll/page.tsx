@@ -12,6 +12,7 @@ import {
   Download,
   Play,
   Printer,
+  Loader2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -25,9 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCompany } from "@/contexts/company-context";
+import { getPayrollData, calculatePayroll } from "@/lib/actions/hr";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 type PayrollStatus = "finalized" | "pending" | "processing";
@@ -52,249 +56,6 @@ interface PayrollRecord {
   presentDays: number;
   status: PayrollStatus;
 }
-
-const MOCK_PAYROLL: PayrollRecord[] = [
-  {
-    id: "1",
-    empCode: "EMP001",
-    name: "Ravi Kumar",
-    department: "Sewing",
-    designation: "Sr. Tailor",
-    basic: 14000,
-    hra: 5600,
-    specialAllowance: 2000,
-    transportAllowance: 800,
-    gross: 22400,
-    pf: 1680,
-    esi: 336,
-    tds: 0,
-    otherDeductions: 0,
-    net: 20384,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-  {
-    id: "2",
-    empCode: "EMP002",
-    name: "Sunita Devi",
-    department: "Sewing",
-    designation: "Tailor",
-    basic: 10500,
-    hra: 4200,
-    specialAllowance: 1500,
-    transportAllowance: 600,
-    gross: 16800,
-    pf: 1260,
-    esi: 252,
-    tds: 0,
-    otherDeductions: 500,
-    net: 14788,
-    workingDays: 25,
-    presentDays: 24,
-    status: "finalized",
-  },
-  {
-    id: "3",
-    empCode: "EMP101",
-    name: "Ramesh Patel",
-    department: "Cutting",
-    designation: "Cutting Master",
-    basic: 22000,
-    hra: 8800,
-    specialAllowance: 4000,
-    transportAllowance: 1200,
-    gross: 36000,
-    pf: 2640,
-    esi: 0,
-    tds: 2200,
-    otherDeductions: 0,
-    net: 31160,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-  {
-    id: "4",
-    empCode: "EMP201",
-    name: "Deepak Chauhan",
-    department: "Finishing",
-    designation: "Finishing Operator",
-    basic: 9500,
-    hra: 3800,
-    specialAllowance: 1200,
-    transportAllowance: 600,
-    gross: 15100,
-    pf: 1140,
-    esi: 227,
-    tds: 0,
-    otherDeductions: 0,
-    net: 13733,
-    workingDays: 25,
-    presentDays: 23,
-    status: "pending",
-  },
-  {
-    id: "5",
-    empCode: "EMP301",
-    name: "Vijay Reddy",
-    department: "Quality",
-    designation: "QC Inspector",
-    basic: 18000,
-    hra: 7200,
-    specialAllowance: 3000,
-    transportAllowance: 1000,
-    gross: 29200,
-    pf: 2160,
-    esi: 0,
-    tds: 1500,
-    otherDeductions: 0,
-    net: 25540,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-  {
-    id: "6",
-    empCode: "EMP401",
-    name: "Ganesh Iyer",
-    department: "Store",
-    designation: "Store Keeper",
-    basic: 16500,
-    hra: 6600,
-    specialAllowance: 2500,
-    transportAllowance: 1000,
-    gross: 26600,
-    pf: 1980,
-    esi: 0,
-    tds: 1200,
-    otherDeductions: 0,
-    net: 23420,
-    workingDays: 25,
-    presentDays: 24,
-    status: "finalized",
-  },
-  {
-    id: "7",
-    empCode: "EMP501",
-    name: "Chandran Pillai",
-    department: "Dyeing",
-    designation: "Dye Master",
-    basic: 28000,
-    hra: 11200,
-    specialAllowance: 5000,
-    transportAllowance: 1500,
-    gross: 45700,
-    pf: 3360,
-    esi: 0,
-    tds: 3800,
-    otherDeductions: 0,
-    net: 38540,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-  {
-    id: "8",
-    empCode: "EMP601",
-    name: "Kavya Menon",
-    department: "Admin",
-    designation: "HR Executive",
-    basic: 20000,
-    hra: 8000,
-    specialAllowance: 3500,
-    transportAllowance: 1200,
-    gross: 32700,
-    pf: 2400,
-    esi: 0,
-    tds: 2000,
-    otherDeductions: 0,
-    net: 28300,
-    workingDays: 25,
-    presentDays: 25,
-    status: "pending",
-  },
-  {
-    id: "9",
-    empCode: "EMP602",
-    name: "Rohit Malhotra",
-    department: "Admin",
-    designation: "Accounts Manager",
-    basic: 25000,
-    hra: 10000,
-    specialAllowance: 4500,
-    transportAllowance: 1500,
-    gross: 41000,
-    pf: 3000,
-    esi: 0,
-    tds: 3200,
-    otherDeductions: 0,
-    net: 34800,
-    workingDays: 25,
-    presentDays: 25,
-    status: "pending",
-  },
-  {
-    id: "10",
-    empCode: "EMP701",
-    name: "Muthukumar Raja",
-    department: "Maintenance",
-    designation: "Sr. Maintenance Tech",
-    basic: 19000,
-    hra: 7600,
-    specialAllowance: 3000,
-    transportAllowance: 1200,
-    gross: 30800,
-    pf: 2280,
-    esi: 0,
-    tds: 1800,
-    otherDeductions: 0,
-    net: 26720,
-    workingDays: 25,
-    presentDays: 24,
-    status: "finalized",
-  },
-  {
-    id: "11",
-    empCode: "EMP008",
-    name: "Nalini Krishnamurthy",
-    department: "Sewing",
-    designation: "Line Supervisor",
-    basic: 24000,
-    hra: 9600,
-    specialAllowance: 4000,
-    transportAllowance: 1500,
-    gross: 39100,
-    pf: 2880,
-    esi: 0,
-    tds: 2800,
-    otherDeductions: 0,
-    net: 33420,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-  {
-    id: "12",
-    empCode: "EMP302",
-    name: "Shobha Pillai",
-    department: "Quality",
-    designation: "QA Manager",
-    basic: 32000,
-    hra: 12800,
-    specialAllowance: 6000,
-    transportAllowance: 2000,
-    gross: 52800,
-    pf: 3840,
-    esi: 0,
-    tds: 5200,
-    otherDeductions: 0,
-    net: 43760,
-    workingDays: 25,
-    presentDays: 25,
-    status: "finalized",
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,6 +82,65 @@ function getStatusBadge(status: PayrollStatus) {
       {v.label}
     </span>
   );
+}
+
+/**
+ * Generate payroll figures from employee data.
+ * In production, these would come from a dedicated payroll/salary master table.
+ * For now, we derive reasonable values based on skill_grade.
+ */
+function computePayrollFromEmployee(emp: {
+  id: string;
+  employee_code: string;
+  full_name: string;
+  department: string;
+  designation: string | null;
+  skill_grade: string | null;
+}): PayrollRecord {
+  // Base salary tiers by skill grade
+  const gradeBasicMap: Record<string, number> = {
+    A: 25000,
+    B: 18000,
+    C: 14000,
+    D: 10000,
+  };
+  const grade = emp.skill_grade ?? "B";
+  const basic = gradeBasicMap[grade] ?? 15000;
+  const hra = Math.round(basic * 0.4);
+  const specialAllowance = Math.round(basic * 0.2);
+  const transportAllowance = Math.round(basic * 0.06);
+  const gross = basic + hra + specialAllowance + transportAllowance;
+
+  const pf = Math.round(basic * 0.12);
+  // ESI applies if gross <= 21000
+  const esi = gross <= 21000 ? Math.round(gross * 0.0175) : 0;
+  // TDS rough estimate for higher salaries
+  const tds = gross > 30000 ? Math.round((gross - 30000) * 0.1) : 0;
+  const otherDeductions = 0;
+
+  const totalDeductions = pf + esi + tds + otherDeductions;
+  const net = gross - totalDeductions;
+
+  return {
+    id: emp.id,
+    empCode: emp.employee_code,
+    name: emp.full_name,
+    department: emp.department,
+    designation: emp.designation ?? "Staff",
+    basic,
+    hra,
+    specialAllowance,
+    transportAllowance,
+    gross,
+    pf,
+    esi,
+    tds,
+    otherDeductions,
+    net,
+    workingDays: 25,
+    presentDays: 25,
+    status: "pending",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -516,18 +336,58 @@ function PayrollRow({ record }: { record: PayrollRecord }) {
 // ---------------------------------------------------------------------------
 
 export default function PayrollPage() {
-  const [month, setMonth] = React.useState("2");
-  const [year, setYear] = React.useState("2026");
+  const { companyId } = useCompany();
+  const [payrollRecords, setPayrollRecords] = React.useState<PayrollRecord[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [month, setMonth] = React.useState(String(new Date().getMonth() + 1));
+  const [year, setYear] = React.useState(String(new Date().getFullYear()));
   const [payrollStatus, setPayrollStatus] = React.useState<
     "draft" | "processing" | "finalized"
   >("draft");
 
-  const totalGross = MOCK_PAYROLL.reduce((s, r) => s + r.gross, 0);
-  const totalNet = MOCK_PAYROLL.reduce((s, r) => s + r.net, 0);
-  const totalPF = MOCK_PAYROLL.reduce((s, r) => s + r.pf, 0);
-  const totalESI = MOCK_PAYROLL.reduce((s, r) => s + r.esi, 0);
-  const totalTDS = MOCK_PAYROLL.reduce((s, r) => s + r.tds, 0);
-  const finalizedCount = MOCK_PAYROLL.filter((r) => r.status === "finalized").length;
+  const fetchPayroll = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getPayrollData(companyId, Number(month), Number(year));
+      if (error) {
+        toast.error("Failed to load payroll data");
+        return;
+      }
+      if (!data || !data.employees) {
+        setPayrollRecords([]);
+        return;
+      }
+
+      const records: PayrollRecord[] = data.employees.map(
+        (emp: {
+          id: string;
+          employee_code: string;
+          full_name: string;
+          department: string;
+          designation: string | null;
+          skill_grade: string | null;
+        }) => computePayrollFromEmployee(emp)
+      );
+
+      setPayrollRecords(records);
+      setPayrollStatus(data.status === "calculated" ? "processing" : "draft");
+    } catch {
+      toast.error("Failed to load payroll data");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId, month, year]);
+
+  React.useEffect(() => {
+    fetchPayroll();
+  }, [fetchPayroll]);
+
+  const totalGross = payrollRecords.reduce((s, r) => s + r.gross, 0);
+  const totalNet = payrollRecords.reduce((s, r) => s + r.net, 0);
+  const totalPF = payrollRecords.reduce((s, r) => s + r.pf, 0);
+  const totalESI = payrollRecords.reduce((s, r) => s + r.esi, 0);
+  const totalTDS = payrollRecords.reduce((s, r) => s + r.tds, 0);
+  const finalizedCount = payrollRecords.filter((r) => r.status === "finalized").length;
 
   const MONTHS = [
     { value: "1", label: "January" },
@@ -553,11 +413,39 @@ export default function PayrollPage() {
     finalized: { label: "Finalized", className: "bg-green-100 text-green-800 border-green-300" },
   };
 
-  const handleProcessPayroll = () => {
-    setPayrollStatus((prev) =>
-      prev === "draft" ? "processing" : prev === "processing" ? "finalized" : "finalized"
-    );
+  const handleProcessPayroll = async () => {
+    if (payrollStatus === "draft") {
+      try {
+        const { error } = await calculatePayroll(companyId, Number(month), Number(year));
+        if (error) {
+          toast.error("Failed to process payroll");
+          return;
+        }
+        setPayrollStatus("processing");
+        // Mark all records as processing
+        setPayrollRecords((prev) =>
+          prev.map((r) => ({ ...r, status: "processing" as PayrollStatus }))
+        );
+        toast.success("Payroll calculated successfully");
+      } catch {
+        toast.error("Failed to process payroll");
+      }
+    } else if (payrollStatus === "processing") {
+      setPayrollStatus("finalized");
+      setPayrollRecords((prev) =>
+        prev.map((r) => ({ ...r, status: "finalized" as PayrollStatus }))
+      );
+      toast.success("Payroll finalized");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -617,14 +505,14 @@ export default function PayrollPage() {
         {[
           {
             label: "Total Employees",
-            value: MOCK_PAYROLL.length,
+            value: payrollRecords.length,
             sub: "Active employees",
             icon: Users,
             iconBg: "bg-blue-600",
           },
           {
             label: "Payroll Processed",
-            value: `${finalizedCount}/${MOCK_PAYROLL.length}`,
+            value: `${finalizedCount}/${payrollRecords.length}`,
             sub: "Records finalized",
             icon: CheckCircle2,
             iconBg: "bg-green-600",
@@ -761,7 +649,7 @@ export default function PayrollPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_PAYROLL.map((record) => (
+                {payrollRecords.map((record) => (
                   <PayrollRow key={record.id} record={record} />
                 ))}
               </tbody>

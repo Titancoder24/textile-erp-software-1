@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createEmployee, updateEmployee } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Employee = Database["public"]["Tables"]["employees"]["Row"]
@@ -56,11 +57,12 @@ type EmployeeFormValues = z.infer<typeof employeeSchema>
 
 interface EmployeeFormProps {
   employee?: Employee | null
+  companyId: string
   onSuccess: (employee: Employee) => void
   onCancel?: () => void
 }
 
-export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProps) {
+export function EmployeeForm({ employee, companyId, onSuccess, onCancel }: EmployeeFormProps) {
   const isEdit = !!employee
 
   const {
@@ -110,14 +112,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
 
   async function onSubmit(values: EmployeeFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      const result: Employee = {
-        id: employee?.id ?? crypto.randomUUID(),
-        company_id: employee?.company_id ?? "",
-        created_at: employee?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        skills: employee?.skills ?? [],
+      const payload = {
         full_name: values.full_name,
         employee_code: values.employee_code,
         department: values.department,
@@ -130,10 +125,19 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Employee updated successfully" : "Employee created successfully")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save employee. Please try again.")
+      if (isEdit && employee) {
+        const { data: result, error } = await updateEmployee(employee.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Employee updated successfully")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createEmployee({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Employee created successfully")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save employee. Please try again.")
     }
   }
 

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { createSupplier, updateSupplier } from "@/lib/actions/suppliers"
 import type { Database } from "@/types/database"
 
 type Supplier = Database["public"]["Tables"]["suppliers"]["Row"]
@@ -53,11 +54,12 @@ type SupplierFormValues = z.infer<typeof supplierSchema>
 
 interface SupplierFormProps {
   supplier?: Supplier | null
+  companyId: string
   onSuccess: (supplier: Supplier) => void
   onCancel?: () => void
 }
 
-export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProps) {
+export function SupplierForm({ supplier, companyId, onSuccess, onCancel }: SupplierFormProps) {
   const isEdit = !!supplier
 
   const {
@@ -122,13 +124,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
 
   async function onSubmit(values: SupplierFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      const result: Supplier = {
-        id: supplier?.id ?? crypto.randomUUID(),
-        company_id: supplier?.company_id ?? "",
-        created_at: supplier?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      const payload = {
         name: values.name,
         code: values.code,
         contact_person: values.contact_person || null,
@@ -141,15 +137,23 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
         payment_terms: values.payment_terms || null,
         avg_lead_time_days: values.avg_lead_time_days,
         gst_number: values.gst_number || null,
-        bank_details: null,
         rating: values.rating ?? null,
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Supplier updated successfully" : "Supplier created successfully")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save supplier. Please try again.")
+      if (isEdit && supplier) {
+        const { data: result, error } = await updateSupplier(supplier.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Supplier updated successfully")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createSupplier({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Supplier created successfully")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save supplier. Please try again.")
     }
   }
 

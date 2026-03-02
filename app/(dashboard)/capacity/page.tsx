@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Search,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -21,218 +22,20 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCompany } from "@/contexts/company-context";
+import { getCapacityOverview } from "@/lib/actions/capacity";
+import type { CapacityOverviewLine } from "@/lib/actions/capacity";
 
 // ---------------------------------------------------------------------------
-// Mock Data
-// ---------------------------------------------------------------------------
-
-const WEEKS = ["W1 Feb", "W2 Feb", "W3 Feb", "W4 Feb", "W1 Mar", "W2 Mar", "W3 Mar", "W4 Mar"];
-
-interface LineData {
-  lineName: string;
-  department: string;
-  capacityPerDay: number;
-  weeklyData: {
-    week: string;
-    allocated: number;
-    available: number;
-    utilization: number;
-  }[];
-  currentUtilization: number;
-  status: "available" | "moderate" | "overloaded";
-}
-
-const MOCK_LINES: LineData[] = [
-  {
-    lineName: "Line 1",
-    department: "Sewing",
-    capacityPerDay: 1200,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 8640, available: 8400, utilization: 103 },
-      { week: "W2 Feb", allocated: 7800, available: 8400, utilization: 93 },
-      { week: "W3 Feb", allocated: 7200, available: 8400, utilization: 86 },
-      { week: "W4 Feb", allocated: 6000, available: 8400, utilization: 71 },
-      { week: "W1 Mar", allocated: 7560, available: 8400, utilization: 90 },
-      { week: "W2 Mar", allocated: 5040, available: 8400, utilization: 60 },
-      { week: "W3 Mar", allocated: 4200, available: 8400, utilization: 50 },
-      { week: "W4 Mar", allocated: 0, available: 8400, utilization: 0 },
-    ],
-    currentUtilization: 103,
-    status: "overloaded",
-  },
-  {
-    lineName: "Line 2",
-    department: "Sewing",
-    capacityPerDay: 1000,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 6300, available: 7000, utilization: 90 },
-      { week: "W2 Feb", allocated: 5950, available: 7000, utilization: 85 },
-      { week: "W3 Feb", allocated: 6650, available: 7000, utilization: 95 },
-      { week: "W4 Feb", allocated: 5250, available: 7000, utilization: 75 },
-      { week: "W1 Mar", allocated: 4900, available: 7000, utilization: 70 },
-      { week: "W2 Mar", allocated: 3500, available: 7000, utilization: 50 },
-      { week: "W3 Mar", allocated: 2800, available: 7000, utilization: 40 },
-      { week: "W4 Mar", allocated: 0, available: 7000, utilization: 0 },
-    ],
-    currentUtilization: 90,
-    status: "moderate",
-  },
-  {
-    lineName: "Line 3",
-    department: "Sewing",
-    capacityPerDay: 900,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 5670, available: 6300, utilization: 90 },
-      { week: "W2 Feb", allocated: 6300, available: 6300, utilization: 100 },
-      { week: "W3 Feb", allocated: 5040, available: 6300, utilization: 80 },
-      { week: "W4 Feb", allocated: 4410, available: 6300, utilization: 70 },
-      { week: "W1 Mar", allocated: 5670, available: 6300, utilization: 90 },
-      { week: "W2 Mar", allocated: 6300, available: 6300, utilization: 100 },
-      { week: "W3 Mar", allocated: 3780, available: 6300, utilization: 60 },
-      { week: "W4 Mar", allocated: 1890, available: 6300, utilization: 30 },
-    ],
-    currentUtilization: 90,
-    status: "moderate",
-  },
-  {
-    lineName: "Line 4",
-    department: "Knitting",
-    capacityPerDay: 800,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 3360, available: 5600, utilization: 60 },
-      { week: "W2 Feb", allocated: 2800, available: 5600, utilization: 50 },
-      { week: "W3 Feb", allocated: 4480, available: 5600, utilization: 80 },
-      { week: "W4 Feb", allocated: 5320, available: 5600, utilization: 95 },
-      { week: "W1 Mar", allocated: 5880, available: 5600, utilization: 105 },
-      { week: "W2 Mar", allocated: 4200, available: 5600, utilization: 75 },
-      { week: "W3 Mar", allocated: 2800, available: 5600, utilization: 50 },
-      { week: "W4 Mar", allocated: 1400, available: 5600, utilization: 25 },
-    ],
-    currentUtilization: 60,
-    status: "available",
-  },
-  {
-    lineName: "Line 5",
-    department: "Sewing",
-    capacityPerDay: 1100,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 8470, available: 7700, utilization: 110 },
-      { week: "W2 Feb", allocated: 7700, available: 7700, utilization: 100 },
-      { week: "W3 Feb", allocated: 6930, available: 7700, utilization: 90 },
-      { week: "W4 Feb", allocated: 6160, available: 7700, utilization: 80 },
-      { week: "W1 Mar", allocated: 5390, available: 7700, utilization: 70 },
-      { week: "W2 Mar", allocated: 4620, available: 7700, utilization: 60 },
-      { week: "W3 Mar", allocated: 3080, available: 7700, utilization: 40 },
-      { week: "W4 Mar", allocated: 0, available: 7700, utilization: 0 },
-    ],
-    currentUtilization: 110,
-    status: "overloaded",
-  },
-  {
-    lineName: "Line 6",
-    department: "Finishing",
-    capacityPerDay: 1500,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 6300, available: 10500, utilization: 60 },
-      { week: "W2 Feb", allocated: 7350, available: 10500, utilization: 70 },
-      { week: "W3 Feb", allocated: 5250, available: 10500, utilization: 50 },
-      { week: "W4 Feb", allocated: 8400, available: 10500, utilization: 80 },
-      { week: "W1 Mar", allocated: 9450, available: 10500, utilization: 90 },
-      { week: "W2 Mar", allocated: 6300, available: 10500, utilization: 60 },
-      { week: "W3 Mar", allocated: 3150, available: 10500, utilization: 30 },
-      { week: "W4 Mar", allocated: 0, available: 10500, utilization: 0 },
-    ],
-    currentUtilization: 60,
-    status: "available",
-  },
-  {
-    lineName: "Line 7",
-    department: "Cutting",
-    capacityPerDay: 2000,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 11900, available: 14000, utilization: 85 },
-      { week: "W2 Feb", allocated: 12600, available: 14000, utilization: 90 },
-      { week: "W3 Feb", allocated: 10500, available: 14000, utilization: 75 },
-      { week: "W4 Feb", allocated: 11200, available: 14000, utilization: 80 },
-      { week: "W1 Mar", allocated: 13300, available: 14000, utilization: 95 },
-      { week: "W2 Mar", allocated: 9800, available: 14000, utilization: 70 },
-      { week: "W3 Mar", allocated: 5600, available: 14000, utilization: 40 },
-      { week: "W4 Mar", allocated: 2800, available: 14000, utilization: 20 },
-    ],
-    currentUtilization: 85,
-    status: "moderate",
-  },
-  {
-    lineName: "Line 8",
-    department: "Sewing",
-    capacityPerDay: 950,
-    weeklyData: [
-      { week: "W1 Feb", allocated: 3990, available: 6650, utilization: 60 },
-      { week: "W2 Feb", allocated: 4655, available: 6650, utilization: 70 },
-      { week: "W3 Feb", allocated: 5320, available: 6650, utilization: 80 },
-      { week: "W4 Feb", allocated: 5985, available: 6650, utilization: 90 },
-      { week: "W1 Mar", allocated: 6650, available: 6650, utilization: 100 },
-      { week: "W2 Mar", allocated: 5320, available: 6650, utilization: 80 },
-      { week: "W3 Mar", allocated: 3990, available: 6650, utilization: 60 },
-      { week: "W4 Mar", allocated: 1330, available: 6650, utilization: 20 },
-    ],
-    currentUtilization: 60,
-    status: "available",
-  },
-];
-
-// Build gantt-style bar chart data
-const GANTT_DATA = WEEKS.map((week, wi) => {
-  const entry: Record<string, string | number> = { week };
-  MOCK_LINES.forEach((line) => {
-    entry[line.lineName] = line.weeklyData[wi].utilization;
-  });
-  return entry;
-});
-
-// Monthly capacity chart data
-const MONTHLY_CAPACITY = [
-  { month: "Sep", planned: 320000, capacity: 420000 },
-  { month: "Oct", planned: 380000, capacity: 420000 },
-  { month: "Nov", planned: 410000, capacity: 420000 },
-  { month: "Dec", planned: 290000, capacity: 400000 },
-  { month: "Jan", planned: 360000, capacity: 420000 },
-  { month: "Feb", planned: 440000, capacity: 420000 },
-  { month: "Mar", planned: 395000, capacity: 420000 },
-  { month: "Apr", planned: 210000, capacity: 420000 },
-];
-
-// Summary table data
-interface LineSummaryRow {
-  lineName: string;
-  department: string;
-  capacityPerDay: number;
-  thisWeek: number;
-  nextWeek: number;
-  week3: number;
-  week4: number;
-  currentPct: number;
-  status: "available" | "moderate" | "overloaded";
-}
-
-const LINE_SUMMARY: LineSummaryRow[] = MOCK_LINES.map((l) => ({
-  lineName: l.lineName,
-  department: l.department,
-  capacityPerDay: l.capacityPerDay,
-  thisWeek: l.weeklyData[0].allocated,
-  nextWeek: l.weeklyData[1].allocated,
-  week3: l.weeklyData[2].allocated,
-  week4: l.weeklyData[3].allocated,
-  currentPct: l.weeklyData[0].utilization,
-  status: l.status,
-}));
-
 // Product types for feasibility checker
+// ---------------------------------------------------------------------------
+
 const PRODUCT_TYPES = [
   { label: "Basic T-Shirt (SMV 8)", value: "basic_tee", smv: 8 },
   { label: "Woven Shirt (SMV 18)", value: "woven_shirt", smv: 18 },
@@ -266,7 +69,8 @@ function getStatusBadge(status: "available" | "moderate" | "overloaded") {
   return { className: map[status], label: labels[status] };
 }
 
-function computeFactibilityResult(
+function computeFeasibilityResult(
+  lines: CapacityOverviewLine[],
   quantity: number,
   smv: number,
   deliveryDateStr: string
@@ -277,13 +81,15 @@ function computeFactibilityResult(
   earliestDate: string;
   recommendedLine: string;
 } {
-  const today = new Date(2026, 1, 26); // Feb 26 2026
+  const today = new Date();
   const deliveryDate = new Date(deliveryDateStr);
 
-  const availableLines = MOCK_LINES.filter(
+  const sewingLines = lines.filter(
     (l) => l.department !== "Cutting" && l.department !== "Finishing"
-  ).map((line) => {
-    const operatorsPerLine = 35;
+  );
+
+  const availableLines = sewingLines.map((line) => {
+    const operatorsPerLine = line.totalOperators;
     const minutesPerDay = 480;
     const capacity = Math.floor((operatorsPerLine * minutesPerDay) / smv);
     const freeCapacityPct = Math.max(0, 100 - line.currentUtilization);
@@ -359,40 +165,107 @@ function CapacityBar({ value }: { value: number }) {
 // ---------------------------------------------------------------------------
 
 export default function CapacityPlanningPage() {
+  const { companyId } = useCompany();
+  const [lines, setLines] = React.useState<CapacityOverviewLine[]>([]);
+  const [weeks, setWeeks] = React.useState<string[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
   const [selectedProduct, setSelectedProduct] = React.useState(PRODUCT_TYPES[0]);
   const [orderQty, setOrderQty] = React.useState(15000);
   const [deliveryDate, setDeliveryDate] = React.useState("2026-03-28");
   const [feasibilityResult, setFeasibilityResult] = React.useState<ReturnType<
-    typeof computeFactibilityResult
+    typeof computeFeasibilityResult
   > | null>(null);
   const [showFeasibility, setShowFeasibility] = React.useState(false);
 
+  // Fetch capacity data
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getCapacityOverview(companyId);
+      if (error) {
+        toast.error("Failed to load capacity data", { description: error });
+        return;
+      }
+      if (data) {
+        setLines(data.lines);
+        setWeeks(data.weeks);
+      }
+    } catch {
+      toast.error("Failed to load capacity data");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Build chart data from lines
+  const ganttData = React.useMemo(() => {
+    if (weeks.length === 0 || lines.length === 0) return [];
+    return weeks.map((week, wi) => {
+      const entry: Record<string, string | number> = { week };
+      lines.forEach((line) => {
+        entry[line.lineName] = line.weeklyData[wi]?.utilization ?? 0;
+      });
+      return entry;
+    });
+  }, [lines, weeks]);
+
+  // Build summary table data
+  const lineSummary = React.useMemo(() => {
+    return lines.map((l) => ({
+      lineName: l.lineName,
+      department: l.department,
+      capacityPerDay: l.capacityPerDay,
+      thisWeek: l.weeklyData[0]?.allocated ?? 0,
+      nextWeek: l.weeklyData[1]?.allocated ?? 0,
+      week3: l.weeklyData[2]?.allocated ?? 0,
+      week4: l.weeklyData[3]?.allocated ?? 0,
+      currentPct: l.weeklyData[0]?.utilization ?? 0,
+      status: l.status,
+    }));
+  }, [lines]);
+
   // Summary stats
-  const totalCapacityPieces = MOCK_LINES.reduce(
+  const totalCapacityPieces = lines.reduce(
     (sum, l) => sum + l.capacityPerDay * 7,
     0
   );
-  const avgUtilization = Math.round(
-    MOCK_LINES.reduce((sum, l) => sum + l.currentUtilization, 0) /
-      MOCK_LINES.length
-  );
-  const overloadedLines = MOCK_LINES.filter(
+  const avgUtilization = lines.length > 0
+    ? Math.round(
+        lines.reduce((sum, l) => sum + l.currentUtilization, 0) /
+          lines.length
+      )
+    : 0;
+  const overloadedLines = lines.filter(
     (l) => l.status === "overloaded"
   ).length;
-  const totalFree = MOCK_LINES.filter((l) => l.status === "available").reduce(
+  const totalFree = lines.filter((l) => l.status === "available").reduce(
     (sum, l) =>
       sum + Math.floor((l.capacityPerDay * 7 * (100 - l.currentUtilization)) / 100),
     0
   );
 
   function handleCheckFeasibility() {
-    const result = computeFactibilityResult(
+    const result = computeFeasibilityResult(
+      lines,
       orderQty,
       selectedProduct.smv,
       deliveryDate
     );
     setFeasibilityResult(result);
     setShowFeasibility(true);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
   }
 
   return (
@@ -421,7 +294,7 @@ export default function CapacityPlanningPage() {
           {
             title: "Factory Capacity",
             value: `${(totalCapacityPieces / 1000).toFixed(0)}K pcs/wk`,
-            sub: "across 8 lines",
+            sub: `across ${lines.length} lines`,
             icon: Factory,
             color: "text-blue-600",
             bg: "bg-blue-50",
@@ -580,42 +453,44 @@ export default function CapacityPlanningPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {feasibilityResult.availableLines.map((line) => (
-                    <div
-                      key={line.lineName}
-                      className={cn(
-                        "rounded-lg border bg-white p-3",
-                        line.lineName === feasibilityResult.recommendedLine
-                          ? "border-blue-300 ring-1 ring-blue-200"
-                          : "border-gray-200"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold text-gray-800">
-                          {line.lineName}
-                        </span>
-                        {line.lineName === feasibilityResult.recommendedLine && (
-                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
-                            Best
-                          </span>
+                {feasibilityResult.availableLines.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {feasibilityResult.availableLines.map((line) => (
+                      <div
+                        key={line.lineName}
+                        className={cn(
+                          "rounded-lg border bg-white p-3",
+                          line.lineName === feasibilityResult.recommendedLine
+                            ? "border-blue-300 ring-1 ring-blue-200"
+                            : "border-gray-200"
                         )}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {line.lineName}
+                          </span>
+                          {line.lineName === feasibilityResult.recommendedLine && (
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+                              Best
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Free:{" "}
+                          <span className="font-medium text-gray-700">
+                            {line.freeCapacity.toLocaleString()} pcs/day
+                          </span>
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Ready by:{" "}
+                          <span className="font-medium text-gray-700">
+                            {line.completionDate}
+                          </span>
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500">
-                        Free:{" "}
-                        <span className="font-medium text-gray-700">
-                          {line.freeCapacity.toLocaleString()} pcs/day
-                        </span>
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Ready by:{" "}
-                        <span className="font-medium text-gray-700">
-                          {line.completionDate}
-                        </span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -623,92 +498,93 @@ export default function CapacityPlanningPage() {
       )}
 
       {/* Line Loading Gantt-style Chart */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              Line Loading - 8 Week View
-            </CardTitle>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-green-500" />
-                Under 75%
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" />
-                75-90%
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" />
-                Over 90%
-              </span>
+      {lines.length > 0 && ganttData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                Line Loading - 8 Week View
+              </CardTitle>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-green-500" />
+                  Under 75%
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" />
+                  75-90%
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-500" />
+                  Over 90%
+                </span>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <div className="min-w-[700px]">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={GANTT_DATA}
-                  barSize={12}
-                  barCategoryGap="25%"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis
-                    dataKey="week"
-                    tick={{ fontSize: 11 }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `${v}%`}
-                    domain={[0, 120]}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [`${value}%`, "Utilization"]}
-                    contentStyle={{
-                      fontSize: 12,
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {MOCK_LINES.map((line) => (
-                    <Bar
-                      key={line.lineName}
-                      dataKey={line.lineName}
-                      stackId="a"
-                      radius={[0, 0, 0, 0]}
-                    >
-                      {GANTT_DATA.map((_, index) => {
-                        const val = GANTT_DATA[index][line.lineName] as number;
-                        return (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={getUtilizationColor(val)}
-                            fillOpacity={0.75}
-                          />
-                        );
-                      })}
-                    </Bar>
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <div className="min-w-[700px]">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    data={ganttData}
+                    barSize={12}
+                    barCategoryGap="25%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis
+                      dataKey="week"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => `${v}%`}
+                      domain={[0, 120]}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      formatter={(value) => [`${value}%`, "Utilization"]}
+                      contentStyle={{
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {lines.map((line) => (
+                      <Bar
+                        key={line.lineName}
+                        dataKey={line.lineName}
+                        stackId="a"
+                        radius={[0, 0, 0, 0]}
+                      >
+                        {ganttData.map((entry, index) => {
+                          const val = (entry[line.lineName] as number) ?? 0;
+                          return (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={getUtilizationColor(val)}
+                              fillOpacity={0.75}
+                            />
+                          );
+                        })}
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
-          <p className="text-xs text-gray-400 mt-2 text-center">
-            Stacked utilization across all 8 lines per week. Red bars indicate overloading.
-          </p>
-        </CardContent>
-      </Card>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Stacked utilization across all {lines.length} lines per week. Red bars indicate overloading.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Two-column: Summary Table + Monthly Capacity */}
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* Capacity Utilization Summary Table */}
-        <Card className="lg:col-span-3">
+      {/* Capacity Utilization Summary Table */}
+      {lineSummary.length > 0 && (
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Capacity Utilization Summary</CardTitle>
           </CardHeader>
@@ -747,7 +623,7 @@ export default function CapacityPlanningPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {LINE_SUMMARY.map((row) => {
+                  {lineSummary.map((row) => {
                     const badge = getStatusBadge(row.status);
                     return (
                       <tr
@@ -799,70 +675,23 @@ export default function CapacityPlanningPage() {
             </div>
           </CardContent>
         </Card>
+      )}
 
-        {/* Monthly Capacity Chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Monthly Capacity vs Planned</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={MONTHLY_CAPACITY} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`}
-                  tickLine={false}
-                />
-                <Tooltip
-                  formatter={(value: number) => [
-                    `${(value / 1000).toFixed(0)}K pcs`,
-                  ]}
-                  contentStyle={{
-                    fontSize: 12,
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar
-                  dataKey="capacity"
-                  fill="#e5e7eb"
-                  radius={[4, 4, 0, 0]}
-                  name="Factory Capacity"
-                >
-                  {MONTHLY_CAPACITY.map((entry, index) => (
-                    <Cell
-                      key={`cell-cap-${index}`}
-                      fill={entry.planned > entry.capacity ? "#fca5a5" : "#e5e7eb"}
-                    />
-                  ))}
-                </Bar>
-                <Bar
-                  dataKey="planned"
-                  fill="#3b82f6"
-                  radius={[4, 4, 0, 0]}
-                  name="Planned Orders"
-                >
-                  {MONTHLY_CAPACITY.map((entry, index) => (
-                    <Cell
-                      key={`cell-plan-${index}`}
-                      fill={entry.planned > entry.capacity ? "#ef4444" : "#3b82f6"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-              <p className="text-xs font-medium text-amber-800 flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Feb is at 104% - 2 lines overloaded. Re-allocate or request overtime.
+      {lines.length === 0 && !loading && (
+        <Card>
+          <CardContent className="py-10 flex flex-col items-center text-center gap-3">
+            <Factory className="h-12 w-12 text-gray-300" />
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                No Production Lines Found
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Add production lines in the Masters section to see capacity planning data.
               </p>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getEmployees, deleteEmployee } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,45 +47,8 @@ const SHIFT_LABELS: Record<string, string> = {
   night: "Night",
 }
 
-const MOCK_EMPLOYEES: Employee[] = [
-  {
-    id: "e1", company_id: "c1", employee_code: "EMP-001", full_name: "Ramesh Kumar",
-    department: "Sewing", designation: "Sewing Operator", phone: "+91 98765 43210",
-    email: "ramesh@example.com", date_of_joining: "2022-04-01", skill_grade: "A",
-    skills: ["lockstitch", "overlock"], current_shift: "morning", is_active: true,
-    created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "e2", company_id: "c1", employee_code: "EMP-002", full_name: "Suresh Yadav",
-    department: "Cutting", designation: "Cutting Master", phone: "+91 98765 43211",
-    email: null, date_of_joining: "2021-01-15", skill_grade: "A",
-    skills: ["spreading", "cutting"], current_shift: "morning", is_active: true,
-    created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "e3", company_id: "c1", employee_code: "EMP-003", full_name: "Priya Sharma",
-    department: "Quality", designation: "QC Inspector", phone: "+91 98765 43212",
-    email: "priya@example.com", date_of_joining: "2023-07-01", skill_grade: "B",
-    skills: ["inspection", "measurement"], current_shift: "morning", is_active: true,
-    created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "e4", company_id: "c1", employee_code: "EMP-004", full_name: "Mohan Lal",
-    department: "Dyeing", designation: "Dyeing Operator", phone: "+91 98765 43213",
-    email: null, date_of_joining: "2023-11-10", skill_grade: "Trainee",
-    skills: [], current_shift: "evening", is_active: true,
-    created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-  {
-    id: "e5", company_id: "c1", employee_code: "EMP-005", full_name: "Anjali Devi",
-    department: "Finishing", designation: "Pressing Operator", phone: null,
-    email: null, date_of_joining: "2020-03-01", skill_grade: "C",
-    skills: ["pressing", "folding"], current_shift: "morning", is_active: false,
-    created_at: "2024-01-05T00:00:00Z", updated_at: "2024-01-05T00:00:00Z",
-  },
-]
-
 export default function EmployeesPage() {
+  const { companyId } = useCompany()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -93,14 +58,18 @@ export default function EmployeesPage() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setEmployees(MOCK_EMPLOYEES)
+      const { data, error } = await getEmployees(companyId)
+      if (error) {
+        toast.error("Failed to load employees")
+        return
+      }
+      setEmployees(data ?? [])
     } catch {
       toast.error("Failed to load employees")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchEmployees()
@@ -133,7 +102,11 @@ export default function EmployeesPage() {
   async function handleDelete() {
     if (!deletingEmployee) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteEmployee(deletingEmployee.id)
+      if (error) {
+        toast.error("Failed to delete employee")
+        return
+      }
       setEmployees((prev) => prev.filter((e) => e.id !== deletingEmployee.id))
       toast.success("Employee deleted")
     } catch {
@@ -295,6 +268,7 @@ export default function EmployeesPage() {
         footer={null}
       >
         <EmployeeForm
+          companyId={companyId}
           employee={editingEmployee}
           onSuccess={handleSuccess}
           onCancel={() => {

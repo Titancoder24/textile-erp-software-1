@@ -166,6 +166,32 @@ export async function getOutstandingPayments(companyId: string) {
   return { data: orders, error: null };
 }
 
+export async function getCostSheets(companyId: string) {
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  const supabase = await createClient();
+
+  const { data: costSheets, error } = await supabase
+    .from("cost_sheets")
+    .select(
+      `
+      *,
+      products ( id, name, style_code ),
+      sales_orders ( id, order_number )
+    `
+    )
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: costSheets, error: null };
+}
+
 export async function getMonthlyPL(companyId: string, year: number = 2025) {
   if (!companyId) {
     return { data: null, error: "Company ID is required" };

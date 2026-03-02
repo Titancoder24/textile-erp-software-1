@@ -7,8 +7,10 @@ import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { generateDocumentNumber } from "@/lib/utils";
 import { CURRENCIES } from "@/lib/constants";
+import { useCompany } from "@/contexts/company-context";
+import { getBuyers } from "@/lib/actions/buyers";
+import { getProducts, getColors, getSizes } from "@/lib/actions/masters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,53 +26,6 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColorSizeMatrix } from "@/components/forms/color-size-matrix";
-
-// ---------------------------------------------------------------------------
-// Static options (replace with API-fetched data)
-// ---------------------------------------------------------------------------
-
-const BUYERS = [
-  { id: "b1", name: "H&M" },
-  { id: "b2", name: "Zara" },
-  { id: "b3", name: "Marks & Spencer" },
-  { id: "b4", name: "Primark" },
-  { id: "b5", name: "Next" },
-  { id: "b6", name: "Lidl" },
-  { id: "b7", name: "ASOS" },
-  { id: "b8", name: "Tesco" },
-];
-
-const PRODUCTS = [
-  { id: "p1", name: "Men's Woven Shirt" },
-  { id: "p2", name: "Women's Knitwear" },
-  { id: "p3", name: "Kids T-Shirt" },
-  { id: "p4", name: "Denim Jeans" },
-  { id: "p5", name: "Ladies Blouse" },
-  { id: "p6", name: "Sports Polo" },
-  { id: "p7", name: "Casual Hoodie" },
-];
-
-const AVAILABLE_COLORS = [
-  { id: "c1", name: "Navy", hex_code: "#001f3f" },
-  { id: "c2", name: "White", hex_code: "#ffffff" },
-  { id: "c3", name: "Grey", hex_code: "#aaaaaa" },
-  { id: "c4", name: "Black", hex_code: "#111111" },
-  { id: "c5", name: "Red", hex_code: "#e74c3c" },
-  { id: "c6", name: "Blue", hex_code: "#3498db" },
-  { id: "c7", name: "Green", hex_code: "#27ae60" },
-  { id: "c8", name: "Yellow", hex_code: "#f1c40f" },
-  { id: "c9", name: "Pink", hex_code: "#e91e8b" },
-];
-
-const AVAILABLE_SIZES = [
-  { id: "s1", name: "XS", sort_order: 1 },
-  { id: "s2", name: "S", sort_order: 2 },
-  { id: "s3", name: "M", sort_order: 3 },
-  { id: "s4", name: "L", sort_order: 4 },
-  { id: "s5", name: "XL", sort_order: 5 },
-  { id: "s6", name: "XXL", sort_order: 6 },
-  { id: "s7", name: "3XL", sort_order: 7 },
-];
 
 const PAYMENT_TERMS = [
   "Advance 100%",
@@ -94,8 +49,33 @@ const PAYMENT_TERMS = [
 
 export default function NewOrderPage() {
   const router = useRouter();
+  const { companyId, userId } = useCompany();
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Fetched master data
+  const [buyers, setBuyers] = React.useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = React.useState<{ id: string; name: string }[]>([]);
+  const [availableColors, setAvailableColors] = React.useState<{ id: string; name: string; hex_code?: string }[]>([]);
+  const [availableSizes, setAvailableSizes] = React.useState<{ id: string; name: string; sort_order: number }[]>([]);
+
+  const fetchMasterData = React.useCallback(async () => {
+    if (!companyId) return;
+    const [buyersRes, productsRes, colorsRes, sizesRes] = await Promise.all([
+      getBuyers(companyId),
+      getProducts(companyId),
+      getColors(companyId),
+      getSizes(companyId),
+    ]);
+    if (buyersRes.data) setBuyers(buyersRes.data.map((b) => ({ id: b.id, name: b.name })));
+    if (productsRes.data) setProducts(productsRes.data.map((p) => ({ id: p.id, name: p.name })));
+    if (colorsRes.data) setAvailableColors(colorsRes.data.map((c) => ({ id: c.id, name: c.name, hex_code: c.hex_code ?? undefined })));
+    if (sizesRes.data) setAvailableSizes(sizesRes.data.map((s) => ({ id: s.id, name: s.name, sort_order: s.sort_order ?? 0 })));
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchMasterData();
+  }, [fetchMasterData]);
 
   // Section 1 - Basic Info
   const [buyer, setBuyer] = React.useState("");
@@ -107,12 +87,12 @@ export default function NewOrderPage() {
   const [paymentTerms, setPaymentTerms] = React.useState("");
 
   // Section 2 - Color x Size matrix
-  const [selectedColorIds, setSelectedColorIds] = React.useState<string[]>(["c1"]);
-  const [selectedSizeIds, setSelectedSizeIds] = React.useState<string[]>(["s2", "s3", "s4", "s5"]);
+  const [selectedColorIds, setSelectedColorIds] = React.useState<string[]>([]);
+  const [selectedSizeIds, setSelectedSizeIds] = React.useState<string[]>([]);
   const [matrixValue, setMatrixValue] = React.useState<Record<string, Record<string, number>>>({});
 
-  const selectedColors = AVAILABLE_COLORS.filter((c) => selectedColorIds.includes(c.id));
-  const selectedSizes = AVAILABLE_SIZES.filter((s) => selectedSizeIds.includes(s.id));
+  const selectedColors = availableColors.filter((c) => selectedColorIds.includes(c.id));
+  const selectedSizes = availableSizes.filter((s) => selectedSizeIds.includes(s.id));
 
   // Section 3 - Pricing
   const [fobPrice, setFobPrice] = React.useState("");
@@ -147,34 +127,47 @@ export default function NewOrderPage() {
 
     try {
       const supabase = createClient();
-      const orderNumber = generateDocumentNumber("ORD", Math.floor(Math.random() * 9000) + 1000);
 
-      const buyerObj = BUYERS.find((b) => b.id === buyer);
-      const productObj = PRODUCTS.find((p) => p.id === product);
+      // Generate order number via DB RPC
+      const { data: orderNumber, error: rpcError } = await supabase.rpc("get_next_number", {
+        p_company_id: companyId,
+        p_document_type: "sales_order",
+      });
+
+      if (rpcError || !orderNumber) {
+        setError(rpcError?.message ?? "Failed to generate order number");
+        setSubmitting(false);
+        return;
+      }
+
+      const productObj = products.find((p) => p.id === product);
 
       const { data, error: insertError } = await supabase
         .from("sales_orders")
         .insert({
+          company_id: companyId,
           order_number: orderNumber,
-          buyer_name: buyerObj?.name ?? buyer,
-          product_name: productObj?.name ?? product,
+          buyer_id: buyer,
+          product_id: product || null,
+          product_name: productObj?.name ?? "Custom",
           order_date: orderDate,
           delivery_date: deliveryDate,
-          payment_terms: paymentTerms,
+          payment_terms: paymentTerms || null,
           fob_price: parseFloat(fobPrice) || 0,
           currency,
-          total_qty: grandTotal,
+          total_quantity: grandTotal,
+          total_value: grandTotal * (parseFloat(fobPrice) || 0),
           color_size_matrix: matrixValue,
-          special_instructions: notes,
+          special_instructions: notes || null,
           status: "confirmed",
+          created_by: userId,
         })
         .select("id")
         .single();
 
       if (insertError) {
-        // If Supabase table does not exist or other DB error, navigate to orders list
-        console.warn("Supabase insert error (table may not exist):", insertError.message);
-        router.push("/orders");
+        setError(insertError.message);
+        setSubmitting(false);
         return;
       }
 
@@ -221,7 +214,7 @@ export default function NewOrderPage() {
                   <SelectValue placeholder="Select buyer..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {BUYERS.map((b) => (
+                  {buyers.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
                     </SelectItem>
@@ -237,7 +230,7 @@ export default function NewOrderPage() {
                   <SelectValue placeholder="Select product..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {PRODUCTS.map((p) => (
+                  {products.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
@@ -312,7 +305,7 @@ export default function NewOrderPage() {
                 Select Colors
               </Label>
               <div className="flex flex-wrap gap-3">
-                {AVAILABLE_COLORS.map((color) => (
+                {availableColors.map((color) => (
                   <label
                     key={color.id}
                     className="flex items-center gap-2 cursor-pointer"
@@ -337,7 +330,7 @@ export default function NewOrderPage() {
                 Select Sizes
               </Label>
               <div className="flex flex-wrap gap-3">
-                {AVAILABLE_SIZES.map((size) => (
+                {availableSizes.map((size) => (
                   <label
                     key={size.id}
                     className="flex items-center gap-2 cursor-pointer"

@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getTrims, deleteTrim } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -46,40 +48,8 @@ const TRIM_TYPE_LABELS: Record<string, string> = {
   tag: "Tag",
 }
 
-const MOCK_TRIMS: Trim[] = [
-  {
-    id: "t1", company_id: "c1", name: "Metal Button 15mm 4-Hole", code: "BTN15M",
-    trim_type: "button", description: "Antique brass finish", uom: "pcs", rate: 2.50,
-    supplier_id: "s2", is_active: true,
-    created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "t2", company_id: "c1", name: "YKK Zipper #5 Close-End", code: "ZIP5CE",
-    trim_type: "zipper", description: "Nylon coil, auto-lock slider", uom: "pcs", rate: 18.00,
-    supplier_id: "s2", is_active: true,
-    created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "t3", company_id: "c1", name: "Woven Main Label", code: "WLBL01",
-    trim_type: "label", description: "Satin weave, brand label", uom: "pcs", rate: 1.20,
-    supplier_id: null, is_active: true,
-    created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "t4", company_id: "c1", name: "Polyester Thread 40/2", code: "THR402",
-    trim_type: "thread", description: "High tenacity polyester", uom: "meter", rate: 0.05,
-    supplier_id: "s2", is_active: true,
-    created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-  {
-    id: "t5", company_id: "c1", name: "Woven Elastic 25mm", code: "EL25W",
-    trim_type: "elastic", description: "White waistband elastic", uom: "meter", rate: 4.50,
-    supplier_id: null, is_active: false,
-    created_at: "2024-01-05T00:00:00Z", updated_at: "2024-01-05T00:00:00Z",
-  },
-]
-
 export default function TrimsPage() {
+  const { companyId } = useCompany()
   const [trims, setTrims] = useState<Trim[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -89,14 +59,18 @@ export default function TrimsPage() {
   const fetchTrims = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setTrims(MOCK_TRIMS)
+      const { data, error } = await getTrims(companyId)
+      if (error) {
+        toast.error("Failed to load trims")
+        return
+      }
+      setTrims(data ?? [])
     } catch {
       toast.error("Failed to load trims")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchTrims()
@@ -129,7 +103,11 @@ export default function TrimsPage() {
   async function handleDelete() {
     if (!deletingTrim) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteTrim(deletingTrim.id)
+      if (error) {
+        toast.error("Failed to delete trim")
+        return
+      }
       setTrims((prev) => prev.filter((t) => t.id !== deletingTrim.id))
       toast.success("Trim deleted")
     } catch {
@@ -280,6 +258,7 @@ export default function TrimsPage() {
       >
         <TrimForm
           trim={editingTrim}
+          companyId={companyId}
           onSuccess={handleSuccess}
           onCancel={() => {
             setOpen(false)

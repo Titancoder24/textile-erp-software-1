@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getProducts, deleteProduct } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,41 +40,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   sweatshirt: "Sweatshirt", tank_top: "Tank Top",
 }
 
-const MOCK_BUYERS: Record<string, string> = {
-  "1": "H&M Group",
-  "2": "Marks & Spencer",
-  "3": "Zara (Inditex)",
-}
-
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "p1", company_id: "c1", name: "Men's Basic Crew Neck Tee", style_code: "HMG-2024-001",
-    category: "t-shirt", description: "Basic crew neck t-shirt in single jersey", buyer_id: "1",
-    is_active: true, created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "p2", company_id: "c1", name: "Classic Polo Pique", style_code: "MNS-2024-015",
-    category: "polo", description: "Classic fit polo in pique fabric", buyer_id: "2",
-    is_active: true, created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "p3", company_id: "c1", name: "Slim Fit Chino Trouser", style_code: "ZAR-2024-042",
-    category: "trouser", description: "Slim fit chino in cotton twill", buyer_id: "3",
-    is_active: true, created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "p4", company_id: "c1", name: "Women's A-Line Dress", style_code: "HMG-2024-088",
-    category: "dress", description: null, buyer_id: "1",
-    is_active: false, created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-  {
-    id: "p5", company_id: "c1", name: "Fleece Pullover Hoodie", style_code: "MNS-2024-032",
-    category: "hoodie", description: "Brushed fleece with kangaroo pocket", buyer_id: "2",
-    is_active: true, created_at: "2024-01-05T00:00:00Z", updated_at: "2024-01-05T00:00:00Z",
-  },
-]
-
 export default function ProductsPage() {
+  const { companyId } = useCompany()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -82,14 +51,18 @@ export default function ProductsPage() {
   const fetchProducts = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setProducts(MOCK_PRODUCTS)
+      const { data, error } = await getProducts(companyId)
+      if (error) {
+        toast.error("Failed to load products")
+        return
+      }
+      setProducts(data ?? [])
     } catch {
       toast.error("Failed to load products")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchProducts()
@@ -122,7 +95,11 @@ export default function ProductsPage() {
   async function handleDelete() {
     if (!deletingProduct) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteProduct(deletingProduct.id)
+      if (error) {
+        toast.error("Failed to delete product")
+        return
+      }
       setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id))
       toast.success("Product deleted")
     } catch {
@@ -161,11 +138,14 @@ export default function ProductsPage() {
     {
       accessorKey: "buyer_id",
       header: "Buyer",
-      cell: ({ row }) => (
-        <span className="text-sm text-gray-700">
-          {row.original.buyer_id ? (MOCK_BUYERS[row.original.buyer_id] ?? row.original.buyer_id) : "—"}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const buyer = (row.original as Record<string, unknown>).buyers as { name?: string } | null
+        return (
+          <span className="text-sm text-gray-700">
+            {buyer?.name ?? (row.original.buyer_id ? row.original.buyer_id : "—")}
+          </span>
+        )
+      },
     },
     {
       accessorKey: "is_active",
@@ -261,6 +241,7 @@ export default function ProductsPage() {
       >
         <ProductForm
           product={editingProduct}
+          companyId={companyId}
           onSuccess={handleSuccess}
           onCancel={() => {
             setOpen(false)

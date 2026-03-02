@@ -189,8 +189,8 @@ export function LineChartCard({
                 }}
                 formatter={
                   formatTooltipValue
-                    ? (value: unknown, name: string) =>
-                        formatTooltipValue(Number(value), name)
+                    ? (value, name) =>
+                        formatTooltipValue(Number(value), String(name ?? ""))
                     : undefined
                 }
               />

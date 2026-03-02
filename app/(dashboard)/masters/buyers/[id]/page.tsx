@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Pencil, Mail, Phone, MapPin, Globe, CreditCard, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -13,27 +13,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FormSheet } from "@/components/forms/form-sheet"
 import { BuyerForm } from "@/components/forms/masters/buyer-form"
 import { EmptyState } from "@/components/ui/empty-state"
+import { getBuyer } from "@/lib/actions/buyers"
+import { getOrders } from "@/lib/actions/orders"
+import { getSamples } from "@/lib/actions/samples"
+import { getShipments } from "@/lib/actions/shipment"
+import { useCompany } from "@/contexts/company-context"
 import type { Database } from "@/types/database"
 
 type Buyer = Database["public"]["Tables"]["buyers"]["Row"]
 
-const MOCK_BUYER: Buyer = {
-  id: "1",
-  company_id: "c1",
-  name: "H&M Group",
-  code: "HMG",
-  contact_person: "Anna Lindqvist",
-  email: "sourcing@hm.com",
-  phone: "+46 31 700 00 00",
-  address: "Mäster Samuelsgatan 46A",
-  city: "Stockholm",
-  country: "Sweden",
-  payment_terms: "Net 60",
-  quality_standard: "GOTS",
-  default_currency: "USD",
-  is_active: true,
-  created_at: "2024-01-15T10:00:00Z",
-  updated_at: "2024-01-15T10:00:00Z",
+interface BuyerStats {
+  totalOrders: number
+  activeOrders: number
+  samplesPending: number
+  shipments: number
 }
 
 function InfoRow({
@@ -62,24 +55,65 @@ function InfoRow({
 export default function BuyerDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { companyId } = useCompany()
   const [buyer, setBuyer] = useState<Buyer | null>(null)
+  const [stats, setStats] = useState<BuyerStats>({
+    totalOrders: 0,
+    activeOrders: 0,
+    samplesPending: 0,
+    shipments: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      try {
-        await new Promise((r) => setTimeout(r, 400))
-        setBuyer(MOCK_BUYER)
-      } catch {
-        toast.error("Failed to load buyer")
-      } finally {
-        setLoading(false)
+  const buyerId = params.id as string
+
+  const loadBuyer = useCallback(async () => {
+    if (!buyerId) return
+    setLoading(true)
+    try {
+      const { data, error } = await getBuyer(buyerId)
+      if (error || !data) {
+        toast.error(error || "Failed to load buyer")
+        setBuyer(null)
+        return
       }
+      setBuyer(data)
+
+      // Fetch related stats in parallel
+      const [ordersRes, samplesRes, shipmentsRes] = await Promise.all([
+        getOrders(companyId, { buyer_id: buyerId }),
+        getSamples(companyId, { buyer_id: buyerId }),
+        getShipments(companyId, { buyer_id: buyerId }),
+      ])
+
+      const orders = ordersRes.data ?? []
+      const samples = samplesRes.data ?? []
+      const shipments = shipmentsRes.data ?? []
+
+      setStats({
+        totalOrders: orders.length,
+        activeOrders: orders.filter(
+          (o: { status: string }) =>
+            o.status === "confirmed" || o.status === "in_production"
+        ).length,
+        samplesPending: samples.filter(
+          (s: { status: string }) =>
+            s.status === "requested" || s.status === "in_progress"
+        ).length,
+        shipments: shipments.length,
+      })
+    } catch {
+      toast.error("Failed to load buyer")
+      setBuyer(null)
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [params.id])
+  }, [buyerId, companyId])
+
+  useEffect(() => {
+    loadBuyer()
+  }, [loadBuyer])
 
   if (loading) {
     return (
@@ -205,19 +239,19 @@ export default function BuyerDetailPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-500">Total Orders</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm font-semibold text-gray-900">{stats.totalOrders}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-500">Active Orders</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm font-semibold text-gray-900">{stats.activeOrders}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-gray-100">
                       <span className="text-sm text-gray-500">Samples Pending</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm font-semibold text-gray-900">{stats.samplesPending}</span>
                     </div>
                     <div className="flex justify-between items-center py-2">
                       <span className="text-sm text-gray-500">Shipments</span>
-                      <span className="text-sm font-semibold text-gray-900">—</span>
+                      <span className="text-sm font-semibold text-gray-900">{stats.shipments}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -264,6 +298,7 @@ export default function BuyerDetailPage() {
         footer={null}
       >
         <BuyerForm
+          companyId={companyId}
           buyer={buyer}
           onSuccess={(updated) => {
             setBuyer(updated)

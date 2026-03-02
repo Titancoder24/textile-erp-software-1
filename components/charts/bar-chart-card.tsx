@@ -196,8 +196,8 @@ export function BarChartCard({
                 cursor={{ fill: "rgba(0,0,0,0.03)" }}
                 formatter={
                   formatTooltipValue
-                    ? (value: unknown, name: string) =>
-                        formatTooltipValue(Number(value), name)
+                    ? (value, name) =>
+                        formatTooltipValue(Number(value), String(name ?? ""))
                     : undefined
                 }
               />

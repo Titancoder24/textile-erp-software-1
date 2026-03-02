@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getSizes, deleteSize } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table/data-table"
@@ -31,20 +33,8 @@ import type { Database } from "@/types/database"
 
 type Size = Database["public"]["Tables"]["sizes"]["Row"]
 
-const MOCK_SIZES: Size[] = [
-  { id: "sz1", company_id: "c1", name: "Extra Small", code: "XS", sort_order: 1, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz2", company_id: "c1", name: "Small", code: "S", sort_order: 2, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz3", company_id: "c1", name: "Medium", code: "M", sort_order: 3, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz4", company_id: "c1", name: "Large", code: "L", sort_order: 4, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz5", company_id: "c1", name: "Extra Large", code: "XL", sort_order: 5, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz6", company_id: "c1", name: "Double Extra Large", code: "2XL", sort_order: 6, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz7", company_id: "c1", name: "Triple Extra Large", code: "3XL", sort_order: 7, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz8", company_id: "c1", name: "28", code: "28", sort_order: 8, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz9", company_id: "c1", name: "30", code: "30", sort_order: 9, created_at: "2024-01-01T00:00:00Z" },
-  { id: "sz10", company_id: "c1", name: "32", code: "32", sort_order: 10, created_at: "2024-01-01T00:00:00Z" },
-]
-
 export default function SizesPage() {
+  const { companyId } = useCompany()
   const [sizes, setSizes] = useState<Size[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -54,14 +44,18 @@ export default function SizesPage() {
   const fetchSizes = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setSizes(MOCK_SIZES.sort((a, b) => a.sort_order - b.sort_order))
+      const { data, error } = await getSizes(companyId)
+      if (error) {
+        toast.error("Failed to load sizes")
+        return
+      }
+      setSizes(data ?? [])
     } catch {
       toast.error("Failed to load sizes")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchSizes()
@@ -94,7 +88,11 @@ export default function SizesPage() {
   async function handleDelete() {
     if (!deletingSize) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteSize(deletingSize.id)
+      if (error) {
+        toast.error("Failed to delete size")
+        return
+      }
       setSizes((prev) => prev.filter((s) => s.id !== deletingSize.id))
       toast.success("Size deleted")
     } catch {
@@ -195,6 +193,7 @@ export default function SizesPage() {
         footer={null}
       >
         <SizeForm
+          companyId={companyId}
           size={editingSize}
           onSuccess={handleSuccess}
           onCancel={() => {

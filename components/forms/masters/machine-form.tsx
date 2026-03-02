@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createMachine, updateMachine } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Machine = Database["public"]["Tables"]["machines"]["Row"]
@@ -70,11 +71,12 @@ type MachineFormValues = z.infer<typeof machineSchema>
 
 interface MachineFormProps {
   machine?: Machine | null
+  companyId: string
   onSuccess: (machine: Machine) => void
   onCancel?: () => void
 }
 
-export function MachineForm({ machine, onSuccess, onCancel }: MachineFormProps) {
+export function MachineForm({ machine, companyId, onSuccess, onCancel }: MachineFormProps) {
   const isEdit = !!machine
 
   const {
@@ -85,7 +87,8 @@ export function MachineForm({ machine, onSuccess, onCancel }: MachineFormProps) 
     reset,
     formState: { errors, isSubmitting },
   } = useForm<MachineFormValues>({
-    resolver: zodResolver(machineSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(machineSchema) as any,
     defaultValues: {
       name: "",
       machine_code: "",
@@ -123,16 +126,7 @@ export function MachineForm({ machine, onSuccess, onCancel }: MachineFormProps) 
 
   async function onSubmit(values: MachineFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      const result: Machine = {
-        id: machine?.id ?? crypto.randomUUID(),
-        company_id: machine?.company_id ?? "",
-        created_at: machine?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        location_id: machine?.location_id ?? null,
-        last_serviced_at: machine?.last_serviced_at ?? null,
-        next_service_due: machine?.next_service_due ?? null,
+      const payload = {
         name: values.name,
         machine_code: values.machine_code,
         machine_type: values.machine_type,
@@ -145,10 +139,19 @@ export function MachineForm({ machine, onSuccess, onCancel }: MachineFormProps) 
         purchase_date: values.purchase_date || null,
       }
 
-      toast.success(isEdit ? "Machine updated successfully" : "Machine created successfully")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save machine. Please try again.")
+      if (isEdit && machine) {
+        const { data: result, error } = await updateMachine(machine.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Machine updated successfully")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createMachine({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Machine created successfully")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save machine. Please try again.")
     }
   }
 

@@ -13,6 +13,69 @@ interface TemplateItem {
   sort_order: number;
 }
 
+export async function getTNAOrders(companyId: string) {
+  const supabase = await createClient();
+
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  // Fetch active orders that have TNA milestones
+  const { data: orders, error: ordersError } = await supabase
+    .from("sales_orders")
+    .select(
+      `
+      id,
+      order_number,
+      product_name,
+      delivery_date,
+      status,
+      buyers ( id, name )
+    `
+    )
+    .eq("company_id", companyId)
+    .in("status", ["confirmed", "in_production", "planned", "shipped"])
+    .order("delivery_date", { ascending: true });
+
+  if (ordersError) {
+    return { data: null, error: ordersError.message };
+  }
+
+  // For each order, fetch its milestones
+  const result = [];
+  for (const order of orders ?? []) {
+    const { data: milestones } = await supabase
+      .from("tna_milestones")
+      .select("*")
+      .eq("order_id", order.id)
+      .order("sort_order", { ascending: true });
+
+    if (milestones && milestones.length > 0) {
+      const buyerName =
+        (order.buyers as { id: string; name: string } | null)?.name ??
+        "Unknown";
+
+      result.push({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        buyer: buyerName,
+        style: order.product_name,
+        deliveryDate: order.delivery_date,
+        milestones: milestones.map((m) => ({
+          id: m.id,
+          name: m.milestone_name,
+          plannedDate: m.planned_date,
+          actualDate: m.actual_date ?? undefined,
+          status: m.status as string,
+          department: m.responsible_department ?? "General",
+        })),
+      });
+    }
+  }
+
+  return { data: result, error: null };
+}
+
 export async function getTNAMilestones(orderId: string) {
   const supabase = await createClient();
 

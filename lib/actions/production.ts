@@ -6,6 +6,10 @@ import type { Database } from "@/types/database";
 
 type ProductionEntryInsert =
   Database["public"]["Tables"]["production_entries"]["Insert"];
+type WorkOrderInsert =
+  Database["public"]["Tables"]["work_orders"]["Insert"];
+type CuttingEntryInsert =
+  Database["public"]["Tables"]["cutting_entries"]["Insert"];
 
 interface ProductionEntryFilters {
   production_line?: string;
@@ -146,10 +150,10 @@ export async function createProductionEntry(
   }
 
   const efficiencyPercent = calculateEfficiency(
-    data.produced_quantity,
+    data.produced_quantity ?? 0,
     smv,
-    data.working_minutes,
-    data.operators_present
+    data.working_minutes ?? 480,
+    data.operators_present ?? 30
   );
 
   const { data: entry, error } = await supabase
@@ -178,7 +182,7 @@ export async function createProductionEntry(
       .from("work_orders")
       .update({
         good_output:
-          (existingWO.good_output ?? 0) + data.produced_quantity,
+          (existingWO.good_output ?? 0) + (data.produced_quantity ?? 0),
         defective_output:
           (existingWO.defective_output ?? 0) +
           (data.defective_quantity ?? 0),
@@ -200,7 +204,12 @@ export async function getFloorDashboardData(companyId: string) {
 
   const { data: lines, error: linesError } = await supabase
     .from("production_lines")
-    .select("*")
+    .select(
+      `
+      *,
+      sales_orders:current_order_id ( id, order_number, product_name, buyer_id, buyers ( name ) )
+    `
+    )
     .eq("company_id", companyId)
     .eq("is_active", true);
 
@@ -218,6 +227,12 @@ export async function getFloorDashboardData(companyId: string) {
     return { data: null, error: entriesError.message };
   }
 
+  // Standard hour slots for the working day
+  const HOUR_SLOTS = [
+    "08:00", "09:00", "10:00", "11:00", "12:00",
+    "13:00", "14:00", "15:00", "16:00", "17:00",
+  ];
+
   const lineStats = (lines ?? []).map((line) => {
     const lineEntries = (todayEntries ?? []).filter(
       (e) => e.production_line === line.name
@@ -231,6 +246,10 @@ export async function getFloorDashboardData(companyId: string) {
       (sum, e) => sum + e.target_quantity,
       0
     );
+    const totalDefects = lineEntries.reduce(
+      (sum, e) => sum + (e.defective_quantity ?? 0),
+      0
+    );
     const avgEfficiency =
       lineEntries.length > 0
         ? Math.round(
@@ -239,7 +258,7 @@ export async function getFloorDashboardData(companyId: string) {
           )
         : 0;
 
-    // Hourly breakdown
+    // Hourly breakdown as ordered array of produced values
     const hourlyBreakdown = lineEntries.reduce(
       (acc: Record<string, { target: number; produced: number }>, entry) => {
         const slot = entry.hour_slot ?? "unset";
@@ -253,15 +272,48 @@ export async function getFloorDashboardData(companyId: string) {
       {}
     );
 
+    // Build hourly output array from slots that have data
+    const hourlyOutput: number[] = HOUR_SLOTS
+      .filter((slot) => hourlyBreakdown[slot])
+      .map((slot) => hourlyBreakdown[slot].produced);
+
+    // Extract order/buyer info from the join
+    const orderData = line.sales_orders as Record<string, unknown> | null;
+    const buyerData = orderData?.buyers as Record<string, unknown> | null;
+
+    // Estimate hours remaining (assume 8-hour shift from 8am to 5pm)
+    const now = new Date();
+    const currentHour = now.getHours();
+    const hoursRemaining = Math.max(0, 17 - currentHour);
+
+    // Average operators from today's entries
+    const avgOperators =
+      lineEntries.length > 0
+        ? Math.round(
+            lineEntries.reduce(
+              (sum, e) => sum + (e.operators_present ?? 0),
+              0
+            ) / lineEntries.length
+          )
+        : 0;
+
     return {
       line_id: line.id,
       line_name: line.name,
       department: line.department,
       target_per_hour: line.target_per_hour,
+      total_operators: line.total_operators,
       today_target: totalTarget,
       today_produced: totalProduced,
+      today_defects: totalDefects,
       efficiency: avgEfficiency,
       current_order_id: line.current_order_id,
+      current_order_number: (orderData?.order_number as string) || null,
+      product_name: (orderData?.product_name as string) || null,
+      buyer_name: (buyerData?.name as string) || null,
+      operators_present: avgOperators,
+      hours_remaining: hoursRemaining,
+      hourly_output: hourlyOutput,
       hourly_breakdown: hourlyBreakdown,
     };
   });
@@ -328,12 +380,15 @@ export async function getDailyProductionSummary(
     {}
   );
 
-  const linesSummary = Object.entries(byLine).map(([name, stats]) => ({
-    line_name: name,
-    produced: stats.produced,
-    target: stats.target,
-    efficiency: Math.round(stats.efficiency / stats.count),
-  }));
+  const linesSummary = Object.entries(byLine).map(([name, val]) => {
+    const stats = val as { produced: number; target: number; efficiency: number; count: number };
+    return {
+      line_name: name,
+      produced: stats.produced,
+      target: stats.target,
+      efficiency: Math.round(stats.efficiency / stats.count),
+    };
+  });
 
   return {
     data: {
@@ -392,13 +447,16 @@ export async function getOrderProductionHistory(orderId: string) {
     {}
   );
 
-  const chartData = Object.entries(byDate).map(([date, stats]) => ({
-    date,
-    produced: stats.produced,
-    target: stats.target,
-    defects: stats.defects,
-    efficiency: Math.round(stats.efficiency / stats.count),
-  }));
+  const chartData = Object.entries(byDate).map(([date, val]) => {
+    const stats = val as { produced: number; target: number; defects: number; efficiency: number; count: number };
+    return {
+      date,
+      produced: stats.produced,
+      target: stats.target,
+      defects: stats.defects,
+      efficiency: Math.round(stats.efficiency / stats.count),
+    };
+  });
 
   const cumulativeProduced = chartData.reduce(
     (
@@ -420,4 +478,181 @@ export async function getOrderProductionHistory(orderId: string) {
     },
     error: null,
   };
+}
+
+// ============================================================
+// WORK ORDERS
+// ============================================================
+
+export async function getWorkOrders(companyId: string) {
+  const supabase = await createClient();
+
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("work_orders")
+    .select(
+      `
+      *,
+      sales_orders ( id, order_number, product_name, buyer_id, delivery_date ),
+      products ( id, name, style_code )
+    `
+    )
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+export async function createWorkOrder(
+  data: Omit<WorkOrderInsert, "wo_number" | "good_output" | "defective_output" | "actual_start_date" | "actual_end_date">
+) {
+  const supabase = await createClient();
+
+  if (!data.company_id) {
+    return { data: null, error: "Company ID is required" };
+  }
+  if (!data.order_id) {
+    return { data: null, error: "Order ID is required" };
+  }
+
+  // Generate work order number
+  const { data: woNumber } = await supabase.rpc("get_next_number", {
+    p_company_id: data.company_id,
+    p_document_type: "work_order",
+  });
+
+  const { data: workOrder, error } = await supabase
+    .from("work_orders")
+    .insert({
+      ...data,
+      wo_number: woNumber || `WO-${Date.now()}`,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: workOrder, error: null };
+}
+
+export async function getOrdersForWorkOrder(companyId: string) {
+  const supabase = await createClient();
+
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("sales_orders")
+    .select("id, order_number, product_name, total_quantity")
+    .eq("company_id", companyId)
+    .in("status", ["confirmed", "in_production"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+// ============================================================
+// CUTTING ENTRIES
+// ============================================================
+
+export async function getCuttingEntries(companyId: string) {
+  const supabase = await createClient();
+
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("cutting_entries")
+    .select(
+      `
+      *,
+      work_orders ( id, wo_number, product_name ),
+      profiles:entered_by ( id, full_name )
+    `
+    )
+    .eq("company_id", companyId)
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+export async function createCuttingEntry(
+  data: Omit<CuttingEntryInsert, "wastage_percent"> & { wastage_percent?: number }
+) {
+  const supabase = await createClient();
+
+  if (!data.company_id) {
+    return { data: null, error: "Company ID is required" };
+  }
+  if (!data.work_order_id) {
+    return { data: null, error: "Work order ID is required" };
+  }
+
+  // Calculate wastage percent
+  const fabricConsumed = Number(data.fabric_consumed) || 0;
+  const plannedConsumption = Number(data.planned_consumption) || 0;
+  const wastagePercent =
+    plannedConsumption > 0
+      ? Math.round(
+          ((fabricConsumed - plannedConsumption) / plannedConsumption) *
+            100 *
+            10
+        ) / 10
+      : 0;
+
+  const { data: entry, error } = await supabase
+    .from("cutting_entries")
+    .insert({
+      ...data,
+      wastage_percent: Math.max(0, wastagePercent),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data: entry, error: null };
+}
+
+export async function getWorkOrdersForDropdown(companyId: string) {
+  const supabase = await createClient();
+
+  if (!companyId) {
+    return { data: null, error: "Company ID is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("work_orders")
+    .select("id, wo_number, product_name, total_quantity")
+    .eq("company_id", companyId)
+    .in("status", ["planned", "in_progress"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
 }
