@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getMachines, deleteMachine } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -59,50 +61,8 @@ const STATUS_LABELS: Record<string, string> = {
   breakdown: "Breakdown",
 }
 
-const MOCK_MACHINES: Machine[] = [
-  {
-    id: "m1", company_id: "c1", name: "Juki DDL-8700", machine_code: "SEW-001",
-    machine_type: "sewing", department: "Sewing", location_id: null,
-    make: "Juki", model: "DDL-8700", serial_number: "JK2024001234",
-    capacity_per_hour: 60, status: "running", purchase_date: "2023-03-15",
-    last_serviced_at: "2024-11-01", next_service_due: "2025-02-01",
-    created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "m2", company_id: "c1", name: "Brother Overlock S-7300A", machine_code: "OVL-003",
-    machine_type: "overlock", department: "Sewing", location_id: null,
-    make: "Brother", model: "S-7300A", serial_number: "BR2024005678",
-    capacity_per_hour: 50, status: "running", purchase_date: "2023-05-20",
-    last_serviced_at: "2024-10-15", next_service_due: "2025-01-15",
-    created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "m3", company_id: "c1", name: "Gerber Spreader XLS-50", machine_code: "SPR-001",
-    machine_type: "spreading", department: "Cutting", location_id: null,
-    make: "Gerber", model: "XLS-50", serial_number: null,
-    capacity_per_hour: 120, status: "idle", purchase_date: "2022-09-10",
-    last_serviced_at: null, next_service_due: null,
-    created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "m4", company_id: "c1", name: "Fong's Jet Dyeing THEN:S", machine_code: "DYE-002",
-    machine_type: "dyeing", department: "Dyeing", location_id: null,
-    make: "Fong's", model: "THEN:S", serial_number: "FG2023009876",
-    capacity_per_hour: 200, status: "maintenance", purchase_date: "2021-12-01",
-    last_serviced_at: "2024-12-01", next_service_due: "2025-03-01",
-    created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-  {
-    id: "m5", company_id: "c1", name: "Eastman Straight Knife", machine_code: "CUT-005",
-    machine_type: "cutting", department: "Cutting", location_id: null,
-    make: "Eastman", model: "Brute", serial_number: null,
-    capacity_per_hour: 80, status: "breakdown", purchase_date: "2020-06-15",
-    last_serviced_at: "2024-08-20", next_service_due: "2024-11-20",
-    created_at: "2024-01-05T00:00:00Z", updated_at: "2024-01-05T00:00:00Z",
-  },
-]
-
 export default function MachinesPage() {
+  const { companyId } = useCompany()
   const [machines, setMachines] = useState<Machine[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -112,14 +72,18 @@ export default function MachinesPage() {
   const fetchMachines = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setMachines(MOCK_MACHINES)
+      const { data, error } = await getMachines(companyId)
+      if (error) {
+        toast.error("Failed to load machines")
+        return
+      }
+      setMachines(data ?? [])
     } catch {
       toast.error("Failed to load machines")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchMachines()
@@ -152,7 +116,11 @@ export default function MachinesPage() {
   async function handleDelete() {
     if (!deletingMachine) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteMachine(deletingMachine.id)
+      if (error) {
+        toast.error("Failed to delete machine")
+        return
+      }
       setMachines((prev) => prev.filter((m) => m.id !== deletingMachine.id))
       toast.success("Machine deleted")
     } catch {
@@ -316,6 +284,7 @@ export default function MachinesPage() {
         footer={null}
       >
         <MachineForm
+          companyId={companyId}
           machine={editingMachine}
           onSuccess={handleSuccess}
           onCancel={() => {

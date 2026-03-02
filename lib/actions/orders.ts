@@ -89,22 +89,29 @@ export async function getOrder(id: string) {
     return { data: null, error: orderError.message };
   }
 
+  // Get work order IDs first so we can query production entries
+  const { data: workOrders } = await supabase
+    .from("work_orders")
+    .select("*")
+    .eq("order_id", id)
+    .order("created_at", { ascending: false });
+
+  const woIds = (workOrders ?? []).map((wo: { id: string }) => wo.id);
+
   const [
     amendmentsResult,
-    workOrdersResult,
     samplesResult,
     shipmentsResult,
     inspectionsResult,
     tnaMilestonesResult,
+    commentsResult,
+    cuttingResult,
+    finishingResult,
+    packingResult,
   ] = await Promise.all([
     supabase
       .from("order_amendments")
-      .select("*")
-      .eq("order_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("work_orders")
-      .select("*")
+      .select("*, profiles:changed_by ( id, full_name )")
       .eq("order_id", id)
       .order("created_at", { ascending: false }),
     supabase
@@ -126,17 +133,66 @@ export async function getOrder(id: string) {
       .select("*")
       .eq("order_id", id)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("comments")
+      .select("*, profiles:author_id ( id, full_name, role )")
+      .eq("entity_type", "sales_order")
+      .eq("entity_id", id)
+      .order("created_at", { ascending: true }),
+    woIds.length > 0
+      ? supabase
+          .from("cutting_entries")
+          .select("total_cut_qty")
+          .in("work_order_id", woIds)
+      : Promise.resolve({ data: [] }),
+    woIds.length > 0
+      ? supabase
+          .from("finishing_entries")
+          .select("passed_to_packing")
+          .in("work_order_id", woIds)
+      : Promise.resolve({ data: [] }),
+    woIds.length > 0
+      ? supabase
+          .from("packing_entries")
+          .select("total_pieces")
+          .in("work_order_id", woIds)
+      : Promise.resolve({ data: [] }),
   ]);
+
+  // Aggregate production stats
+  const cutQty = (cuttingResult.data ?? []).reduce(
+    (sum: number, e: { total_cut_qty: number }) => sum + (e.total_cut_qty ?? 0),
+    0
+  );
+  const sewedQty = (workOrders ?? []).reduce(
+    (sum: number, wo: { good_output: number | null }) => sum + (wo.good_output ?? 0),
+    0
+  );
+  const finishedQty = (finishingResult.data ?? []).reduce(
+    (sum: number, e: { passed_to_packing: number }) => sum + (e.passed_to_packing ?? 0),
+    0
+  );
+  const packedQty = (packingResult.data ?? []).reduce(
+    (sum: number, e: { total_pieces: number }) => sum + (e.total_pieces ?? 0),
+    0
+  );
 
   return {
     data: {
       ...order,
       amendments: amendmentsResult.data ?? [],
-      work_orders: workOrdersResult.data ?? [],
+      work_orders: workOrders ?? [],
       samples: samplesResult.data ?? [],
       shipments: shipmentsResult.data ?? [],
       inspections: inspectionsResult.data ?? [],
       tna_milestones: tnaMilestonesResult.data ?? [],
+      comments: commentsResult.data ?? [],
+      production_stats: {
+        cut_qty: cutQty,
+        sewed_qty: sewedQty,
+        finished_qty: finishedQty,
+        packed_qty: packedQty,
+      },
     },
     error: null,
   };
@@ -382,4 +438,35 @@ export async function getOrderMaterialStatus(orderId: string) {
     },
     error: null,
   };
+}
+
+export async function createOrderComment(
+  companyId: string,
+  orderId: string,
+  content: string,
+  authorId: string
+) {
+  const supabase = await createClient();
+
+  if (!companyId || !orderId || !content.trim()) {
+    return { data: null, error: "Company ID, order ID and content are required" };
+  }
+
+  const { data, error } = await supabase
+    .from("comments")
+    .insert({
+      company_id: companyId,
+      entity_type: "sales_order",
+      entity_id: orderId,
+      content: content.trim(),
+      author_id: authorId,
+    })
+    .select("*, profiles:author_id ( id, full_name, role )")
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
 }

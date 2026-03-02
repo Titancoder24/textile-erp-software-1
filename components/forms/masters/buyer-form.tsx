@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CURRENCIES } from "@/lib/constants"
+import { createBuyer, updateBuyer } from "@/lib/actions/buyers"
 import type { Database } from "@/types/database"
 
 type Buyer = Database["public"]["Tables"]["buyers"]["Row"]
@@ -42,13 +43,14 @@ type BuyerFormValues = z.infer<typeof buyerSchema>
 
 interface BuyerFormProps {
   buyer?: Buyer | null
+  companyId: string
   onSuccess: (buyer: Buyer) => void
   onCancel?: () => void
 }
 
 const QUALITY_STANDARDS = ["ISO 9001", "OEKO-TEX", "GOTS", "WRAP", "BSCI", "SA8000", "SEDEX", "Other"]
 
-export function BuyerForm({ buyer, onSuccess, onCancel }: BuyerFormProps) {
+export function BuyerForm({ buyer, companyId, onSuccess, onCancel }: BuyerFormProps) {
   const isEdit = !!buyer
 
   const {
@@ -97,14 +99,7 @@ export function BuyerForm({ buyer, onSuccess, onCancel }: BuyerFormProps) {
 
   async function onSubmit(values: BuyerFormValues) {
     try {
-      // Simulate API call — replace with real Supabase action
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      const result: Buyer = {
-        id: buyer?.id ?? crypto.randomUUID(),
-        company_id: buyer?.company_id ?? "",
-        created_at: buyer?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      const payload = {
         name: values.name,
         code: values.code,
         contact_person: values.contact_person || null,
@@ -119,10 +114,19 @@ export function BuyerForm({ buyer, onSuccess, onCancel }: BuyerFormProps) {
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Buyer updated successfully" : "Buyer created successfully")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save buyer. Please try again.")
+      if (isEdit && buyer) {
+        const { data: result, error } = await updateBuyer(buyer.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Buyer updated successfully")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createBuyer({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Buyer created successfully")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save buyer. Please try again.")
     }
   }
 

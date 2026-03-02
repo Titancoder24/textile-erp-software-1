@@ -11,9 +11,10 @@ import {
   Hash,
   Clock,
   Pencil,
+  Loader2,
 } from "lucide-react";
 
-import { cn, formatDate, getDaysRemaining } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, getDaysRemaining, getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,136 +25,9 @@ import {
   OrderProgressTracker,
   buildDefaultStages,
 } from "@/app/(dashboard)/orders/components/order-progress-tracker";
-
-// ---------------------------------------------------------------------------
-// Mock detail data
-// ---------------------------------------------------------------------------
-
-const MOCK_ORDER = {
-  id: "1",
-  orderNumber: "ORD-2026-0012",
-  buyer: "H&M",
-  style: "Men's Woven Shirt",
-  totalQty: 12000,
-  fobPrice: 8.5,
-  currency: "USD",
-  orderDate: "2026-01-15",
-  deliveryDate: "2026-03-05",
-  status: "in_production",
-  currentStage: "sewing",
-  colors: ["Navy", "White", "Grey"],
-  sizes: ["S", "M", "L", "XL", "XXL"],
-  colorSizeMatrix: {
-    Navy: { S: 800, M: 1200, L: 1000, XL: 600, XXL: 200 },
-    White: { S: 900, M: 1400, L: 1100, XL: 700, XXL: 300 },
-    Grey: { S: 700, M: 1100, L: 1000, XL: 550, XXL: 250 },
-  },
-  tnaItems: [
-    {
-      milestone: "Order Confirmation",
-      planned: "2026-01-15",
-      actual: "2026-01-15",
-      status: "done",
-    },
-    {
-      milestone: "Fabric Booking",
-      planned: "2026-01-20",
-      actual: "2026-01-19",
-      status: "done",
-    },
-    {
-      milestone: "Trim Booking",
-      planned: "2026-01-22",
-      actual: "2026-01-22",
-      status: "done",
-    },
-    {
-      milestone: "Fabric In-House",
-      planned: "2026-02-05",
-      actual: "2026-02-06",
-      status: "done",
-    },
-    {
-      milestone: "Cutting Start",
-      planned: "2026-02-10",
-      actual: "2026-02-11",
-      status: "done",
-    },
-    {
-      milestone: "Sewing Start",
-      planned: "2026-02-15",
-      actual: "2026-02-16",
-      status: "in_progress",
-    },
-    {
-      milestone: "Finishing Start",
-      planned: "2026-02-25",
-      actual: null,
-      status: "pending",
-    },
-    {
-      milestone: "Ex-Factory",
-      planned: "2026-03-01",
-      actual: null,
-      status: "pending",
-    },
-    {
-      milestone: "Vessel Departure",
-      planned: "2026-03-05",
-      actual: null,
-      status: "pending",
-    },
-  ],
-  amendments: [
-    {
-      id: "A1",
-      date: "2026-01-28",
-      field: "Quantity",
-      oldValue: "10,000 pcs",
-      newValue: "12,000 pcs",
-      reason: "Buyer increased order",
-      by: "Sarah Chen",
-    },
-    {
-      id: "A2",
-      date: "2026-02-02",
-      field: "Delivery Date",
-      oldValue: "28 Feb 2026",
-      newValue: "05 Mar 2026",
-      reason: "Extra 2000 pcs added",
-      by: "Sarah Chen",
-    },
-  ],
-  comments: [
-    {
-      id: "c1",
-      author: "Sarah Chen",
-      role: "Merchandiser",
-      timestamp: "2026-02-10 09:15",
-      text: "Fabric inspection passed. Cutting can proceed.",
-    },
-    {
-      id: "c2",
-      author: "David Kim",
-      role: "Production Manager",
-      timestamp: "2026-02-16 14:30",
-      text: "Sewing started on Line 3 and Line 5. Efficiency at 72%.",
-    },
-    {
-      id: "c3",
-      author: "John Patel",
-      role: "QC",
-      timestamp: "2026-02-20 11:00",
-      text: "Random inline inspection done. DHU at 1.8%, within tolerance.",
-    },
-  ],
-  productionStats: {
-    cutQty: 12200,
-    sewedQty: 6800,
-    finishedQty: 0,
-    packedQty: 0,
-  },
-};
+import { useCompany } from "@/contexts/company-context";
+import { getOrder, createOrderComment } from "@/lib/actions/orders";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // TNA status badge
@@ -161,6 +35,7 @@ const MOCK_ORDER = {
 
 const TNA_STATUS_MAP = {
   done: "bg-green-50 text-green-700 border border-green-200",
+  completed: "bg-green-50 text-green-700 border border-green-200",
   in_progress: "bg-blue-50 text-blue-700 border border-blue-200",
   pending: "bg-gray-100 text-gray-600 border border-gray-200",
   delayed: "bg-red-50 text-red-700 border border-red-200",
@@ -168,6 +43,7 @@ const TNA_STATUS_MAP = {
 
 const TNA_STATUS_LABELS = {
   done: "Done",
+  completed: "Done",
   in_progress: "In Progress",
   pending: "Pending",
   delayed: "Delayed",
@@ -184,28 +60,232 @@ function TNAStatusBadge({ status }: { status: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers to derive current production stage from order status / work orders
+// ---------------------------------------------------------------------------
+
+function deriveCurrentStage(
+  orderStatus: string,
+  workOrders: { status: string }[],
+  productionStats: { cut_qty: number; sewed_qty: number; finished_qty: number; packed_qty: number }
+): string {
+  if (orderStatus === "shipped" || orderStatus === "delivered") return "shipped";
+  if (orderStatus === "ready_to_ship") return "packing";
+
+  // Derive from production stats
+  if (productionStats.packed_qty > 0) return "packing";
+  if (productionStats.finished_qty > 0) return "finishing";
+  if (productionStats.sewed_qty > 0) return "sewing";
+  if (productionStats.cut_qty > 0) return "cutting";
+
+  // Check work order statuses
+  const hasActiveWO = workOrders.some(
+    (wo) => wo.status === "in_progress" || wo.status === "started"
+  );
+  if (hasActiveWO) return "cutting";
+
+  if (orderStatus === "in_production") return "material_sourcing";
+  if (orderStatus === "confirmed") return "material_sourcing";
+
+  return "material_sourcing";
+}
+
+// ---------------------------------------------------------------------------
+// Parse color/size matrix from DB JSON
+// ---------------------------------------------------------------------------
+
+interface ColorSizeEntry {
+  color: string;
+  sizes: Record<string, number>;
+}
+
+function parseColorSizeMatrix(
+  matrix: unknown
+): { colors: string[]; sizes: string[]; data: Record<string, Record<string, number>> } {
+  const result: Record<string, Record<string, number>> = {};
+  const allSizes = new Set<string>();
+  const colorOrder: string[] = [];
+
+  if (!matrix || !Array.isArray(matrix)) {
+    return { colors: [], sizes: [], data: {} };
+  }
+
+  for (const entry of matrix as ColorSizeEntry[]) {
+    if (!entry.color) continue;
+    colorOrder.push(entry.color);
+    result[entry.color] = {};
+    if (entry.sizes && typeof entry.sizes === "object") {
+      for (const [size, qty] of Object.entries(entry.sizes)) {
+        allSizes.add(size);
+        result[entry.color][size] = Number(qty) || 0;
+      }
+    }
+  }
+
+  return {
+    colors: colorOrder,
+    sizes: Array.from(allSizes),
+    data: result,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type OrderData = any;
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
 export default function OrderDetailPage() {
-  useParams();
-  const order = MOCK_ORDER;
-  const daysLeft = getDaysRemaining(order.deliveryDate);
-  const stages = buildDefaultStages(order.currentStage);
+  const params = useParams();
+  const orderId = params.id as string;
+  const { companyId, userId, profile } = useCompany();
 
-  // Calculate color-size matrix totals
-  const sizeTotal = (size: string) =>
-    order.colors.reduce(
-      (sum, color) =>
-        sum + (order.colorSizeMatrix[color as keyof typeof order.colorSizeMatrix]?.[size] ?? 0),
-      0
+  const [order, setOrder] = React.useState<OrderData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [commentText, setCommentText] = React.useState("");
+  const [postingComment, setPostingComment] = React.useState(false);
+
+  const fetchOrder = React.useCallback(async () => {
+    if (!orderId) return;
+    setLoading(true);
+    const { data, error } = await getOrder(orderId);
+    if (error) {
+      toast.error("Failed to load order", { description: error });
+    } else {
+      setOrder(data);
+    }
+    setLoading(false);
+  }, [orderId]);
+
+  React.useEffect(() => {
+    fetchOrder();
+  }, [fetchOrder]);
+
+  const handlePostComment = React.useCallback(async () => {
+    if (!commentText.trim() || !orderId) return;
+    setPostingComment(true);
+    const { data, error } = await createOrderComment(
+      companyId,
+      orderId,
+      commentText,
+      userId
     );
+    if (error) {
+      toast.error("Failed to post comment", { description: error });
+    } else if (data) {
+      setOrder((prev: OrderData) =>
+        prev ? { ...prev, comments: [...(prev.comments ?? []), data] } : prev
+      );
+      setCommentText("");
+      toast.success("Comment posted");
+    }
+    setPostingComment(false);
+  }, [commentText, orderId, companyId, userId]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Not found state
+  if (!order) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" asChild className="gap-1.5">
+            <Link href="/orders">
+              <ArrowLeft className="h-4 w-4" />
+              Orders
+            </Link>
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="flex h-40 items-center justify-center p-6">
+            <p className="text-sm text-gray-400">Order not found.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Map DB fields
+  const orderNumber = order.order_number ?? "";
+  const buyerName = order.buyers?.name ?? "Unknown Buyer";
+  const styleName = order.product_name ?? order.products?.name ?? "Unknown Style";
+  const totalQty = order.total_quantity ?? 0;
+  const fobPrice = Number(order.fob_price) || 0;
+  const currency = order.currency ?? "USD";
+  const orderDate = order.order_date ?? "";
+  const deliveryDate = order.delivery_date ?? "";
+  const status = order.status ?? "confirmed";
+  const specialInstructions = order.special_instructions ?? "";
+
+  const daysLeft = deliveryDate ? getDaysRemaining(deliveryDate) : 0;
+
+  // Color-size matrix
+  const csMatrix = parseColorSizeMatrix(order.color_size_matrix);
+  const colors = csMatrix.colors;
+  const sizes = csMatrix.sizes;
+  const colorSizeData = csMatrix.data;
+
+  // Production stats
+  const productionStats = order.production_stats ?? {
+    cut_qty: 0,
+    sewed_qty: 0,
+    finished_qty: 0,
+    packed_qty: 0,
+  };
+
+  // Derive current production stage
+  const currentStage = deriveCurrentStage(status, order.work_orders ?? [], productionStats);
+  const stages = buildDefaultStages(currentStage);
+
+  // TNA milestones
+  const tnaItems = (order.tna_milestones ?? []).map((m: any) => ({
+    milestone: m.milestone_name ?? "",
+    planned: m.planned_date ?? "",
+    actual: m.actual_date ?? null,
+    status: m.status ?? "pending",
+  }));
+
+  // Amendments
+  const amendments = (order.amendments ?? []).map((a: any, idx: number) => ({
+    id: `A${idx + 1}`,
+    date: a.created_at ?? "",
+    field: a.field_name ?? "",
+    oldValue: a.old_value ?? "",
+    newValue: a.new_value ?? "",
+    reason: a.reason ?? "",
+    by: a.profiles?.full_name ?? "Unknown",
+  }));
+
+  // Comments
+  const comments = (order.comments ?? []).map((c: any) => ({
+    id: c.id,
+    author: c.profiles?.full_name ?? "Unknown",
+    role: c.profiles?.role ?? "",
+    timestamp: c.created_at ? formatDateTime(c.created_at) : "",
+    text: c.content ?? "",
+  }));
+
+  // Matrix totals
+  const sizeTotal = (size: string) =>
+    colors.reduce((sum, color) => sum + (colorSizeData[color]?.[size] ?? 0), 0);
   const colorTotal = (color: string) => {
-    const row = order.colorSizeMatrix[color as keyof typeof order.colorSizeMatrix];
+    const row = colorSizeData[color];
     if (!row) return 0;
     return Object.values(row).reduce((sum, v) => sum + v, 0);
   };
-  const grandTotal = order.colors.reduce((sum, c) => sum + colorTotal(c), 0);
+  const grandTotal = colors.reduce((sum, c) => sum + colorTotal(c), 0);
 
   return (
     <div className="space-y-6">
@@ -232,9 +312,9 @@ export default function OrderDetailPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-xl font-black text-gray-900 font-mono">
-                  {order.orderNumber}
+                  {orderNumber}
                 </h1>
-                <OrderStatusBadge status={order.status} />
+                <OrderStatusBadge status={status} />
                 {daysLeft < 0 ? (
                   <Badge className="bg-red-100 text-red-700 border border-red-200">
                     {Math.abs(daysLeft)}d Overdue
@@ -248,32 +328,36 @@ export default function OrderDetailPage() {
               <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4 text-sm">
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <User className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="font-medium">{order.buyer}</span>
+                  <span className="font-medium">{buyerName}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <Package className="h-3.5 w-3.5 text-gray-400" />
-                  <span>{order.style}</span>
+                  <span>{styleName}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <Hash className="h-3.5 w-3.5 text-gray-400" />
                   <span className="font-semibold tabular-nums">
-                    {order.totalQty.toLocaleString()} pcs
+                    {totalQty.toLocaleString()} pcs
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <span className="text-gray-400 font-mono text-xs">$</span>
                   <span className="font-semibold tabular-nums">
-                    {order.currency} {order.fobPrice.toFixed(2)} FOB
+                    {currency} {fobPrice.toFixed(2)} FOB
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  <span>Order: {formatDate(order.orderDate)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-gray-600">
-                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  <span>Delivery: {formatDate(order.deliveryDate)}</span>
-                </div>
+                {orderDate && (
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                    <span>Order: {formatDate(orderDate)}</span>
+                  </div>
+                )}
+                {deliveryDate && (
+                  <div className="flex items-center gap-1.5 text-gray-600">
+                    <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                    <span>Delivery: {formatDate(deliveryDate)}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <Clock className="h-3.5 w-3.5 text-gray-400" />
                   <span
@@ -296,8 +380,8 @@ export default function OrderDetailPage() {
                 <div className="flex items-center gap-1.5 text-gray-600">
                   <span className="text-gray-400 text-xs">Total:</span>
                   <span className="font-bold text-gray-900 tabular-nums">
-                    {order.currency}{" "}
-                    {(order.totalQty * order.fobPrice).toLocaleString()}
+                    {currency}{" "}
+                    {(totalQty * fobPrice).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -343,7 +427,7 @@ export default function OrderDetailPage() {
                     Total Quantity
                   </p>
                   <p className="mt-1 text-2xl font-black tabular-nums text-gray-900">
-                    {order.totalQty.toLocaleString()}
+                    {totalQty.toLocaleString()}
                   </p>
                   <p className="text-xs text-gray-400">pieces</p>
                 </div>
@@ -352,19 +436,19 @@ export default function OrderDetailPage() {
                     FOB Value
                   </p>
                   <p className="mt-1 text-2xl font-black tabular-nums text-gray-900">
-                    ${(order.totalQty * order.fobPrice / 1000).toFixed(1)}K
+                    ${(totalQty * fobPrice / 1000).toFixed(1)}K
                   </p>
-                  <p className="text-xs text-gray-400">{order.currency}</p>
+                  <p className="text-xs text-gray-400">{currency}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">
                     Colors
                   </p>
                   <p className="mt-1 text-2xl font-black tabular-nums text-gray-900">
-                    {order.colors.length}
+                    {colors.length}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {order.colors.join(", ")}
+                    {colors.length > 0 ? colors.join(", ") : "N/A"}
                   </p>
                 </div>
                 <div>
@@ -372,86 +456,94 @@ export default function OrderDetailPage() {
                     Sizes
                   </p>
                   <p className="mt-1 text-2xl font-black tabular-nums text-gray-900">
-                    {order.sizes.length}
+                    {sizes.length}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {order.sizes.join(", ")}
+                    {sizes.length > 0 ? sizes.join(", ") : "N/A"}
                   </p>
                 </div>
               </div>
+
+              {/* Special instructions */}
+              {specialInstructions && (
+                <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-1">
+                    Special Instructions
+                  </p>
+                  <p className="text-sm text-amber-900">{specialInstructions}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Color-Size Matrix */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Color / Size Matrix</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="py-2 pl-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Color
-                    </th>
-                    {order.sizes.map((size) => (
-                      <th
-                        key={size}
-                        className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500"
-                      >
-                        {size}
+          {colors.length > 0 && sizes.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Color / Size Matrix</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="py-2 pl-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Color
                       </th>
+                      {sizes.map((size) => (
+                        <th
+                          key={size}
+                          className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500"
+                        >
+                          {size}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-900">
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {colors.map((color, rowIdx) => (
+                      <tr
+                        key={color}
+                        className={rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                      >
+                        <td className="py-2.5 pl-3 pr-4 font-medium text-gray-900">
+                          {color}
+                        </td>
+                        {sizes.map((size) => (
+                          <td
+                            key={size}
+                            className="px-3 py-2.5 text-center tabular-nums text-gray-700"
+                          >
+                            {(colorSizeData[color]?.[size] ?? 0).toLocaleString()}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
+                          {colorTotal(color).toLocaleString()}
+                        </td>
+                      </tr>
                     ))}
-                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-900">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.colors.map((color, rowIdx) => (
-                    <tr
-                      key={color}
-                      className={rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
-                    >
-                      <td className="py-2.5 pl-3 pr-4 font-medium text-gray-900">
-                        {color}
-                      </td>
-                      {order.sizes.map((size) => (
+                    {/* Total row */}
+                    <tr className="border-t border-gray-200 bg-gray-50 font-semibold">
+                      <td className="py-2.5 pl-3 pr-4 text-gray-900">Total</td>
+                      {sizes.map((size) => (
                         <td
                           key={size}
-                          className="px-3 py-2.5 text-center tabular-nums text-gray-700"
+                          className="px-3 py-2.5 text-center tabular-nums text-gray-900"
                         >
-                          {(
-                            order.colorSizeMatrix[
-                              color as keyof typeof order.colorSizeMatrix
-                            ]?.[size] ?? 0
-                          ).toLocaleString()}
+                          {sizeTotal(size).toLocaleString()}
                         </td>
                       ))}
-                      <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
-                        {colorTotal(color).toLocaleString()}
+                      <td className="px-3 py-2.5 text-right font-black tabular-nums text-gray-900">
+                        {grandTotal.toLocaleString()}
                       </td>
                     </tr>
-                  ))}
-                  {/* Total row */}
-                  <tr className="border-t border-gray-200 bg-gray-50 font-semibold">
-                    <td className="py-2.5 pl-3 pr-4 text-gray-900">Total</td>
-                    {order.sizes.map((size) => (
-                      <td
-                        key={size}
-                        className="px-3 py-2.5 text-center tabular-nums text-gray-900"
-                      >
-                        {sizeTotal(size).toLocaleString()}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2.5 text-right font-black tabular-nums text-gray-900">
-                      {grandTotal.toLocaleString()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Production Tab */}
@@ -469,22 +561,22 @@ export default function OrderDetailPage() {
                 {[
                   {
                     label: "Cut",
-                    value: order.productionStats.cutQty,
+                    value: productionStats.cut_qty,
                     color: "text-blue-600",
                   },
                   {
                     label: "Sewn",
-                    value: order.productionStats.sewedQty,
+                    value: productionStats.sewed_qty,
                     color: "text-indigo-600",
                   },
                   {
                     label: "Finished",
-                    value: order.productionStats.finishedQty,
+                    value: productionStats.finished_qty,
                     color: "text-purple-600",
                   },
                   {
                     label: "Packed",
-                    value: order.productionStats.packedQty,
+                    value: productionStats.packed_qty,
                     color: "text-teal-600",
                   },
                 ].map((stat) => (
@@ -501,8 +593,8 @@ export default function OrderDetailPage() {
                       {stat.value.toLocaleString()}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {order.totalQty > 0
-                        ? `${Math.round((stat.value / order.totalQty) * 100)}%`
+                      {totalQty > 0
+                        ? `${Math.round((stat.value / totalQty) * 100)}%`
                         : "0%"}{" "}
                       of order
                     </p>
@@ -536,81 +628,91 @@ export default function OrderDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="py-3 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Milestone
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Planned
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Actual
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Variance
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.tnaItems.map((item, idx) => {
-                    const variance =
-                      item.actual
-                        ? Math.ceil(
-                            (new Date(item.actual).getTime() -
-                              new Date(item.planned).getTime()) /
-                              (1000 * 60 * 60 * 24)
-                          )
-                        : null;
-                    return (
-                      <tr
-                        key={idx}
-                        className={cn(
-                          "border-t border-gray-100",
-                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                        )}
-                      >
-                        <td className="py-3 pl-4 pr-3 font-medium text-gray-900">
-                          {item.milestone}
-                        </td>
-                        <td className="px-3 py-3 text-gray-600">
-                          {formatDate(item.planned)}
-                        </td>
-                        <td className="px-3 py-3 text-gray-600">
-                          {item.actual ? formatDate(item.actual) : (
-                            <span className="text-gray-400">—</span>
+              {tnaItems.length === 0 ? (
+                <div className="flex h-32 items-center justify-center">
+                  <p className="text-sm text-gray-400">
+                    No TNA milestones defined for this order.
+                  </p>
+                </div>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="py-3 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Milestone
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Planned
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Actual
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Variance
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tnaItems.map((item: { milestone: string; planned: string; actual: string | null; status: string }, idx: number) => {
+                      const variance =
+                        item.actual
+                          ? Math.ceil(
+                              (new Date(item.actual).getTime() -
+                                new Date(item.planned).getTime()) /
+                                (1000 * 60 * 60 * 24)
+                            )
+                          : null;
+                      return (
+                        <tr
+                          key={idx}
+                          className={cn(
+                            "border-t border-gray-100",
+                            idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                           )}
-                        </td>
-                        <td className="px-3 py-3">
-                          {variance !== null ? (
-                            <span
-                              className={cn(
-                                "font-semibold tabular-nums",
-                                variance > 0
-                                  ? "text-red-600"
-                                  : variance < 0
-                                  ? "text-green-600"
-                                  : "text-gray-500"
-                              )}
-                            >
-                              {variance > 0 ? `+${variance}d` : variance < 0 ? `${variance}d` : "On time"}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3">
-                          <TNAStatusBadge status={item.status} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        >
+                          <td className="py-3 pl-4 pr-3 font-medium text-gray-900">
+                            {item.milestone}
+                          </td>
+                          <td className="px-3 py-3 text-gray-600">
+                            {item.planned ? formatDate(item.planned) : (
+                              <span className="text-gray-400">--</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-gray-600">
+                            {item.actual ? formatDate(item.actual) : (
+                              <span className="text-gray-400">--</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {variance !== null ? (
+                              <span
+                                className={cn(
+                                  "font-semibold tabular-nums",
+                                  variance > 0
+                                    ? "text-red-600"
+                                    : variance < 0
+                                    ? "text-green-600"
+                                    : "text-gray-500"
+                                )}
+                              >
+                                {variance > 0 ? `+${variance}d` : variance < 0 ? `${variance}d` : "On time"}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">--</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <TNAStatusBadge status={item.status} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -622,7 +724,7 @@ export default function OrderDetailPage() {
               <CardTitle className="text-base">Order Amendments</CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
-              {order.amendments.length === 0 ? (
+              {amendments.length === 0 ? (
                 <div className="flex h-32 items-center justify-center">
                   <p className="text-sm text-gray-400">No amendments yet.</p>
                 </div>
@@ -643,7 +745,7 @@ export default function OrderDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {order.amendments.map((amend, idx) => (
+                    {amendments.map((amend: { id: string; date: string; field: string; oldValue: string; newValue: string; reason: string; by: string }, idx: number) => (
                       <tr
                         key={amend.id}
                         className={cn(
@@ -655,7 +757,7 @@ export default function OrderDetailPage() {
                           {amend.id}
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap text-gray-600">
-                          {formatDate(amend.date)}
+                          {amend.date ? formatDate(amend.date) : "--"}
                         </td>
                         <td className="px-3 py-3 font-medium text-gray-900">
                           {amend.field}
@@ -686,47 +788,64 @@ export default function OrderDetailPage() {
               <CardTitle className="text-base">Communication Thread</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {order.comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                    {comment.author
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()
-                      .slice(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {comment.author}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {comment.role}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {comment.timestamp}
-                      </span>
+              {comments.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">
+                  No comments yet. Start the conversation below.
+                </p>
+              ) : (
+                comments.map((comment: { id: string; author: string; role: string; timestamp: string; text: string }) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                      {getInitials(comment.author)}
                     </div>
-                    <p className="mt-1 text-sm text-gray-700">{comment.text}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {comment.author}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {comment.role}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {comment.timestamp}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-700">{comment.text}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
 
               <Separator />
 
               <div className="flex gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
-                  ME
+                  {getInitials(profile.full_name)}
                 </div>
                 <div className="flex-1">
                   <textarea
                     className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 resize-none"
                     rows={3}
                     placeholder="Add a comment..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    disabled={postingComment}
                   />
                   <div className="mt-2 flex justify-end">
-                    <Button size="sm">Post Comment</Button>
+                    <Button
+                      size="sm"
+                      onClick={handlePostComment}
+                      disabled={postingComment || !commentText.trim()}
+                    >
+                      {postingComment ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Posting...
+                        </>
+                      ) : (
+                        "Post Comment"
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>

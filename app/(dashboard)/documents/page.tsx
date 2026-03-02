@@ -14,12 +14,12 @@ import {
   Package,
   Ship,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Tabs,
   TabsContent,
@@ -48,6 +48,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/contexts/company-context";
+import { getDocuments, getShipmentNumbers } from "@/lib/actions/documents";
 
 /* ---------- Types ---------- */
 
@@ -70,160 +72,10 @@ interface Document {
   generatedDate: string;
   status: DocStatus;
   shipmentId?: string;
-  expiresIn?: number; // days until expiry, undefined = no expiry
+  expiresIn?: number;
 }
 
-/* ---------- Mock Data ---------- */
-
-const MOCK_DOCUMENTS: Document[] = [
-  {
-    id: "DOC-2026-0048",
-    name: "Packing List - SH-2026-0034",
-    type: "Packing List",
-    reference: "SH-2026-0034",
-    generatedBy: "Sunita Menon",
-    generatedDate: "2026-02-25",
-    status: "Approved",
-    shipmentId: "SH-2026-0034",
-  },
-  {
-    id: "DOC-2026-0047",
-    name: "Commercial Invoice - SO-2026-0052",
-    type: "Commercial Invoice",
-    reference: "SO-2026-0052",
-    generatedBy: "Priya Nair",
-    generatedDate: "2026-02-25",
-    status: "Pending Approval",
-  },
-  {
-    id: "DOC-2026-0046",
-    name: "Certificate of Origin - SH-2026-0033",
-    type: "Certificate of Origin",
-    reference: "SH-2026-0033",
-    generatedBy: "Ravi Kumar",
-    generatedDate: "2026-02-24",
-    status: "Approved",
-    shipmentId: "SH-2026-0033",
-    expiresIn: 45,
-  },
-  {
-    id: "DOC-2026-0045",
-    name: "Inspection Certificate - INS-0341",
-    type: "Inspection Certificate",
-    reference: "INS-0341",
-    generatedBy: "Amira Khan",
-    generatedDate: "2026-02-24",
-    status: "Approved",
-    expiresIn: 12,
-  },
-  {
-    id: "DOC-2026-0044",
-    name: "Test Report - Fabric Lot B-214",
-    type: "Test Report",
-    reference: "GRN-2026-0189",
-    generatedBy: "Quality Dept.",
-    generatedDate: "2026-02-23",
-    status: "Sent",
-    expiresIn: 5,
-  },
-  {
-    id: "DOC-2026-0043",
-    name: "Packing List - SH-2026-0032",
-    type: "Packing List",
-    reference: "SH-2026-0032",
-    generatedBy: "Sunita Menon",
-    generatedDate: "2026-02-22",
-    status: "Sent",
-    shipmentId: "SH-2026-0032",
-  },
-  {
-    id: "DOC-2026-0042",
-    name: "Commercial Invoice - SO-2026-0048",
-    type: "Commercial Invoice",
-    reference: "SO-2026-0048",
-    generatedBy: "Priya Nair",
-    generatedDate: "2026-02-22",
-    status: "Approved",
-  },
-  {
-    id: "DOC-2026-0041",
-    name: "Certificate of Origin - SH-2026-0031",
-    type: "Certificate of Origin",
-    reference: "SH-2026-0031",
-    generatedBy: "Ravi Kumar",
-    generatedDate: "2026-02-21",
-    status: "Draft",
-    shipmentId: "SH-2026-0031",
-  },
-  {
-    id: "DOC-2026-0040",
-    name: "Packing List - SH-2026-0031",
-    type: "Packing List",
-    reference: "SH-2026-0031",
-    generatedBy: "Sunita Menon",
-    generatedDate: "2026-02-21",
-    status: "Approved",
-    shipmentId: "SH-2026-0031",
-  },
-  {
-    id: "DOC-2026-0039",
-    name: "Inspection Certificate - INS-0338",
-    type: "Inspection Certificate",
-    reference: "INS-0338",
-    generatedBy: "Amira Khan",
-    generatedDate: "2026-02-20",
-    status: "Sent",
-    expiresIn: -3,
-  },
-  {
-    id: "DOC-2026-0038",
-    name: "Test Report - Chemical Safety B-210",
-    type: "Test Report",
-    reference: "LAB-0021",
-    generatedBy: "Quality Dept.",
-    generatedDate: "2026-02-19",
-    status: "Pending Approval",
-  },
-  {
-    id: "DOC-2026-0037",
-    name: "Commercial Invoice - SO-2026-0045",
-    type: "Commercial Invoice",
-    reference: "SO-2026-0045",
-    generatedBy: "Priya Nair",
-    generatedDate: "2026-02-18",
-    status: "Sent",
-  },
-  {
-    id: "DOC-2026-0036",
-    name: "Packing List - SH-2026-0030",
-    type: "Packing List",
-    reference: "SH-2026-0030",
-    generatedBy: "Sunita Menon",
-    generatedDate: "2026-02-17",
-    status: "Sent",
-    shipmentId: "SH-2026-0030",
-  },
-  {
-    id: "DOC-2026-0035",
-    name: "Certificate of Origin - SH-2026-0029",
-    type: "Certificate of Origin",
-    reference: "SH-2026-0029",
-    generatedBy: "Ravi Kumar",
-    generatedDate: "2026-02-16",
-    status: "Draft",
-    shipmentId: "SH-2026-0029",
-    expiresIn: -8,
-  },
-  {
-    id: "DOC-2026-0034",
-    name: "Test Report - Colour Fastness ST-4398",
-    type: "Test Report",
-    reference: "QC-REPORT-0044",
-    generatedBy: "Quality Dept.",
-    generatedDate: "2026-02-15",
-    status: "Approved",
-  },
-];
+/* ---------- Constants ---------- */
 
 const DOC_TYPES: DocType[] = [
   "Packing List",
@@ -234,15 +86,26 @@ const DOC_TYPES: DocType[] = [
   "Other",
 ];
 
-const MOCK_SHIPMENTS = [
-  "SH-2026-0034",
-  "SH-2026-0033",
-  "SH-2026-0032",
-  "SH-2026-0031",
-  "SH-2026-0030",
-];
-
 /* ---------- Helpers ---------- */
+
+function mapFileTypeToDocType(fileType: string | null, entityType: string | null): DocType {
+  const ft = (fileType || "").toLowerCase();
+  const et = (entityType || "").toLowerCase();
+  if (et.includes("packing") || ft.includes("packing")) return "Packing List";
+  if (et.includes("invoice") || ft.includes("invoice")) return "Commercial Invoice";
+  if (et.includes("origin") || ft.includes("origin") || ft.includes("certificate")) return "Certificate of Origin";
+  if (et.includes("inspection") || ft.includes("inspection")) return "Inspection Certificate";
+  if (et.includes("test") || ft.includes("test")) return "Test Report";
+  return "Other";
+}
+
+function mapStatusFromEntity(entityType: string | null): DocStatus {
+  const et = (entityType || "").toLowerCase();
+  if (et.includes("draft")) return "Draft";
+  if (et.includes("pending")) return "Pending Approval";
+  if (et.includes("sent") || et.includes("delivered")) return "Sent";
+  return "Approved";
+}
 
 function statusBadge(status: DocStatus) {
   const variants: Record<DocStatus, string> = {
@@ -319,7 +182,7 @@ function PackingListPreview({ shipment }: { shipment: string }) {
         <div>
           <p className="text-base font-bold text-gray-900">PACKING LIST</p>
           <p className="text-gray-500">Reference: {shipment}</p>
-          <p className="text-gray-500">Date: 25 Feb 2026</p>
+          <p className="text-gray-500">Date: {new Date().toLocaleDateString()}</p>
         </div>
         <div className="text-right">
           <p className="font-semibold text-gray-700">TextileOS Demo Factory</p>
@@ -332,16 +195,11 @@ function PackingListPreview({ shipment }: { shipment: string }) {
       <div className="mb-4 grid grid-cols-2 gap-4">
         <div>
           <p className="font-semibold text-gray-700">Buyer / Consignee</p>
-          <p className="text-gray-500">H&M Group</p>
-          <p className="text-gray-500">Gustav Adolfs Torg 47A</p>
-          <p className="text-gray-500">Stockholm, Sweden</p>
+          <p className="text-gray-500">Buyer details from shipment</p>
         </div>
         <div>
           <p className="font-semibold text-gray-700">Shipment Details</p>
-          <p className="text-gray-500">Port of Loading: Tuticorin</p>
-          <p className="text-gray-500">Port of Discharge: Hamburg</p>
-          <p className="text-gray-500">Container: MSCU-7842310-5</p>
-          <p className="text-gray-500">ETD: 05 Mar 2026</p>
+          <p className="text-gray-500">Reference: {shipment}</p>
         </div>
       </div>
       {/* Cartons Table */}
@@ -383,7 +241,7 @@ function PackingListPreview({ shipment }: { shipment: string }) {
         </tfoot>
       </table>
       <p className="mt-4 text-gray-400 italic">
-        Generated by TextileOS Document Center on 25 Feb 2026. This is a system-generated document.
+        Generated by TextileOS Document Center. This is a system-generated document.
       </p>
     </div>
   );
@@ -394,9 +252,11 @@ function PackingListPreview({ shipment }: { shipment: string }) {
 function GenerateDocSheet({
   open,
   onClose,
+  shipments,
 }: {
   open: boolean;
   onClose: () => void;
+  shipments: string[];
 }) {
   const [docType, setDocType] = React.useState<string>("");
   const [shipment, setShipment] = React.useState<string>("");
@@ -439,7 +299,7 @@ function GenerateDocSheet({
                 <SelectValue placeholder="Select shipment..." />
               </SelectTrigger>
               <SelectContent>
-                {MOCK_SHIPMENTS.map((s) => (
+                {shipments.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -476,7 +336,7 @@ function GenerateDocSheet({
             <Button
               disabled={!docType || !shipment}
               onClick={() => {
-                alert(`Document "${docType}" generated for ${shipment}`);
+                toast.success(`Document "${docType}" generated for ${shipment}`);
                 onClose();
               }}
             >
@@ -549,7 +409,16 @@ function DocRow({ doc }: { doc: Document }) {
 
 /* ---------- Documents Table ---------- */
 
-function DocumentsTable({ docs }: { docs: Document[] }) {
+function DocumentsTable({ docs, loading }: { docs: Document[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+        <p className="mt-3 text-sm text-gray-500">Loading documents...</p>
+      </div>
+    );
+  }
+
   if (docs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -587,14 +456,66 @@ function DocumentsTable({ docs }: { docs: Document[] }) {
 /* ---------- Page Component ---------- */
 
 export default function DocumentCenterPage() {
+  const { companyId } = useCompany();
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("all");
+  const [loading, setLoading] = React.useState(true);
+  const [documents, setDocuments] = React.useState<Document[]>([]);
+  const [shipmentNumbers, setShipmentNumbers] = React.useState<string[]>([]);
 
-  const totalDocs = MOCK_DOCUMENTS.length;
-  const pendingDocs = MOCK_DOCUMENTS.filter((d) => d.status === "Pending Approval" || d.status === "Draft").length;
-  const approvedDocs = MOCK_DOCUMENTS.filter((d) => d.status === "Approved" || d.status === "Sent").length;
-  const overdueDocs = MOCK_DOCUMENTS.filter((d) => d.expiresIn !== undefined && d.expiresIn < 0).length;
-  const expiringSoon = MOCK_DOCUMENTS.filter((d) => d.expiresIn !== undefined && d.expiresIn >= 0 && d.expiresIn <= 7);
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [docRes, shipRes] = await Promise.all([
+        getDocuments(companyId),
+        getShipmentNumbers(companyId),
+      ]);
+
+      if (docRes.error) {
+        toast.error("Failed to load documents: " + docRes.error);
+      } else {
+        const mapped: Document[] = (docRes.data ?? []).map((f: Record<string, unknown>) => {
+          const profileObj = f.profiles as Record<string, unknown> | null;
+          const createdAt = f.created_at as string;
+          const date = createdAt ? createdAt.split("T")[0] : "";
+
+          return {
+            id: f.id as string,
+            name: (f.file_name as string) || "Untitled Document",
+            type: mapFileTypeToDocType(f.file_type as string | null, f.entity_type as string | null),
+            reference: (f.entity_id as string)?.slice(0, 8) || "—",
+            generatedBy: (profileObj?.full_name as string) || "System",
+            generatedDate: date,
+            status: mapStatusFromEntity(f.entity_type as string | null),
+            shipmentId: (f.entity_type as string) === "shipment" ? (f.entity_id as string) : undefined,
+          };
+        });
+        setDocuments(mapped);
+      }
+
+      if (shipRes.error) {
+        toast.error("Failed to load shipments: " + shipRes.error);
+      } else {
+        setShipmentNumbers(
+          (shipRes.data ?? []).map((s: Record<string, unknown>) => s.shipment_number as string)
+        );
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const totalDocs = documents.length;
+  const pendingDocs = documents.filter((d) => d.status === "Pending Approval" || d.status === "Draft").length;
+  const approvedDocs = documents.filter((d) => d.status === "Approved" || d.status === "Sent").length;
+  const overdueDocs = documents.filter((d) => d.expiresIn !== undefined && d.expiresIn < 0).length;
+  const expiringSoon = documents.filter((d) => d.expiresIn !== undefined && d.expiresIn >= 0 && d.expiresIn <= 7);
 
   const filterByTab = (docs: Document[], tab: string) => {
     if (tab === "all") return docs;
@@ -609,7 +530,7 @@ export default function DocumentCenterPage() {
     return docs.filter((d) => d.type === typeMap[tab]);
   };
 
-  const filtered = filterByTab(MOCK_DOCUMENTS, activeTab);
+  const filtered = filterByTab(documents, activeTab);
 
   return (
     <div className="space-y-6">
@@ -690,7 +611,7 @@ export default function DocumentCenterPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {MOCK_DOCUMENTS.filter((d) => d.status === "Pending Approval").map((d) => (
+              {documents.filter((d) => d.status === "Pending Approval").map((d) => (
                 <div key={d.id} className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2">
                   <div>
                     <p className="text-xs font-medium text-gray-800">{d.name}</p>
@@ -701,7 +622,7 @@ export default function DocumentCenterPage() {
                   </button>
                 </div>
               ))}
-              {MOCK_DOCUMENTS.filter((d) => d.status === "Pending Approval").length === 0 && (
+              {documents.filter((d) => d.status === "Pending Approval").length === 0 && (
                 <p className="text-sm text-gray-400">No documents pending approval</p>
               )}
             </div>
@@ -717,7 +638,7 @@ export default function DocumentCenterPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {MOCK_DOCUMENTS.filter((d) => d.shipmentId).slice(0, 5).map((d) => (
+              {documents.filter((d) => d.shipmentId).slice(0, 5).map((d) => (
                 <div key={d.id} className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-gray-800">{d.name}</p>
@@ -726,6 +647,9 @@ export default function DocumentCenterPage() {
                   <div className="ml-2">{statusBadge(d.status)}</div>
                 </div>
               ))}
+              {documents.filter((d) => d.shipmentId).length === 0 && (
+                <p className="text-sm text-gray-400">No shipment documents found</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -742,32 +666,36 @@ export default function DocumentCenterPage() {
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-4 flex-wrap gap-1 h-auto">
-              <TabsTrigger value="all" className="text-xs">All ({MOCK_DOCUMENTS.length})</TabsTrigger>
+              <TabsTrigger value="all" className="text-xs">All ({documents.length})</TabsTrigger>
               <TabsTrigger value="packing" className="text-xs">
-                Packing List ({MOCK_DOCUMENTS.filter((d) => d.type === "Packing List").length})
+                Packing List ({documents.filter((d) => d.type === "Packing List").length})
               </TabsTrigger>
               <TabsTrigger value="invoice" className="text-xs">
-                Commercial Invoice ({MOCK_DOCUMENTS.filter((d) => d.type === "Commercial Invoice").length})
+                Commercial Invoice ({documents.filter((d) => d.type === "Commercial Invoice").length})
               </TabsTrigger>
               <TabsTrigger value="origin" className="text-xs">
-                Cert. of Origin ({MOCK_DOCUMENTS.filter((d) => d.type === "Certificate of Origin").length})
+                Cert. of Origin ({documents.filter((d) => d.type === "Certificate of Origin").length})
               </TabsTrigger>
               <TabsTrigger value="inspection" className="text-xs">
-                Inspection Cert. ({MOCK_DOCUMENTS.filter((d) => d.type === "Inspection Certificate").length})
+                Inspection Cert. ({documents.filter((d) => d.type === "Inspection Certificate").length})
               </TabsTrigger>
               <TabsTrigger value="test" className="text-xs">
-                Test Reports ({MOCK_DOCUMENTS.filter((d) => d.type === "Test Report").length})
+                Test Reports ({documents.filter((d) => d.type === "Test Report").length})
               </TabsTrigger>
             </TabsList>
             <TabsContent value={activeTab}>
-              <DocumentsTable docs={filtered} />
+              <DocumentsTable docs={filtered} loading={loading} />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
       {/* Generate Document Sheet */}
-      <GenerateDocSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <GenerateDocSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        shipments={shipmentNumbers}
+      />
     </div>
   );
 }

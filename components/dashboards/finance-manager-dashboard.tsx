@@ -74,27 +74,29 @@ export function FinanceManagerDashboard({ companyId }: FinanceManagerDashboardPr
       try {
         const supabase = createClient();
 
+        // Note: invoices table not yet in schema — query purchase_orders as financial proxy
         const [invoicesResult] = await Promise.all([
           supabase
-            .from("invoices")
-            .select("id, invoice_number, total_amount, due_date, status, buyers(name)")
+            .from("purchase_orders")
+            .select("id, po_number, total_amount, expected_delivery_date, status, suppliers(name)")
             .eq("company_id", companyId)
-            .in("status", ["pending", "overdue", "partial"]),
+            .in("status", ["draft", "sent", "partial"]),
         ]);
 
-        const invoices = invoicesResult.data ?? [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const invoices = (invoicesResult.data ?? []) as any[];
         if (invoices.length === 0) {
           setLoading(false);
           return;
         }
 
-        const pendingInvoices = invoices.map((inv) => ({
-          id: inv.id,
-          invoice: inv.invoice_number ?? "--",
-          buyer: (inv.buyers as { name?: string } | null)?.name ?? "Unknown",
-          amount: inv.total_amount ?? 0,
-          due_date: inv.due_date ?? "--",
-          status: inv.status,
+        const pendingInvoices = invoices.map((inv: Record<string, unknown>) => ({
+          id: inv.id as string,
+          invoice: (inv.po_number as string) ?? "--",
+          buyer: ((inv.suppliers as { name?: string }) ?? {}).name ?? "Unknown",
+          amount: (inv.total_amount as number) ?? 0,
+          due_date: (inv.expected_delivery_date as string) ?? "--",
+          status: inv.status as string,
         }));
 
         const receivables = invoices.reduce((s, i) => s + (i.total_amount ?? 0), 0);

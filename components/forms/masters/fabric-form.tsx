@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { FABRIC_TYPES } from "@/lib/constants"
+import { createFabric, updateFabric } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Fabric = Database["public"]["Tables"]["fabrics"]["Row"]
@@ -51,11 +52,12 @@ type FabricFormValues = z.infer<typeof fabricSchema>
 
 interface FabricFormProps {
   fabric?: Fabric | null
+  companyId: string
   onSuccess: (fabric: Fabric) => void
   onCancel?: () => void
 }
 
-export function FabricForm({ fabric, onSuccess, onCancel }: FabricFormProps) {
+export function FabricForm({ fabric, companyId, onSuccess, onCancel }: FabricFormProps) {
   const isEdit = !!fabric
 
   const {
@@ -108,14 +110,7 @@ export function FabricForm({ fabric, onSuccess, onCancel }: FabricFormProps) {
 
   async function onSubmit(values: FabricFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600))
-
-      const result: Fabric = {
-        id: fabric?.id ?? crypto.randomUUID(),
-        company_id: fabric?.company_id ?? "",
-        created_at: fabric?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        supplier_id: values.supplier_id || null,
+      const payload = {
         name: values.name,
         code: values.code,
         fabric_type: values.fabric_type,
@@ -126,13 +121,23 @@ export function FabricForm({ fabric, onSuccess, onCancel }: FabricFormProps) {
         composition: values.composition || null,
         uom: values.uom,
         rate: values.rate,
+        supplier_id: values.supplier_id || null,
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Fabric updated" : "Fabric created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save fabric.")
+      if (isEdit && fabric) {
+        const { data: result, error } = await updateFabric(fabric.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Fabric updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createFabric({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Fabric created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save fabric.")
     }
   }
 

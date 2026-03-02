@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createChemical, updateChemical } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Chemical = Database["public"]["Tables"]["chemicals"]["Row"]
@@ -54,11 +55,12 @@ type ChemicalFormValues = z.infer<typeof chemicalSchema>
 
 interface ChemicalFormProps {
   chemical?: Chemical | null
+  companyId: string
   onSuccess: (chemical: Chemical) => void
   onCancel?: () => void
 }
 
-export function ChemicalForm({ chemical, onSuccess, onCancel }: ChemicalFormProps) {
+export function ChemicalForm({ chemical, companyId, onSuccess, onCancel }: ChemicalFormProps) {
   const isEdit = !!chemical
 
   const {
@@ -69,7 +71,8 @@ export function ChemicalForm({ chemical, onSuccess, onCancel }: ChemicalFormProp
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ChemicalFormValues>({
-    resolver: zodResolver(chemicalSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(chemicalSchema) as any,
     defaultValues: {
       name: "",
       code: "",
@@ -101,26 +104,29 @@ export function ChemicalForm({ chemical, onSuccess, onCancel }: ChemicalFormProp
 
   async function onSubmit(values: ChemicalFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Chemical = {
-        id: chemical?.id ?? crypto.randomUUID(),
-        company_id: chemical?.company_id ?? "",
-        created_at: chemical?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        supplier_id: values.supplier_id || null,
+      const payload = {
         name: values.name,
         code: values.code,
         chemical_type: values.chemical_type,
         uom: values.uom,
         rate: values.rate,
+        supplier_id: values.supplier_id || null,
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Chemical updated" : "Chemical created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save chemical.")
+      if (isEdit && chemical) {
+        const { data: result, error } = await updateChemical(chemical.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Chemical updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createChemical({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Chemical created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save chemical.")
     }
   }
 

@@ -8,14 +8,12 @@ import {
   Shield,
   CheckCircle,
   XCircle,
-  ChevronUp,
-  ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -39,16 +37,15 @@ import { cn } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@/lib/constants";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/company-context";
+import {
+  getCompanyUsers,
+  updateUserRole,
+  toggleUserStatus,
+} from "@/lib/actions/users";
+import type { Database } from "@/types/database";
 
-type User = {
-  id: string;
-  fullName: string;
-  email: string;
-  role: Role;
-  department: string | null;
-  isActive: boolean;
-  lastLogin: string | null;
-};
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 const DEPARTMENTS = [
   "Merchandising",
@@ -99,19 +96,6 @@ const ROLE_COLORS: Record<string, string> = {
   vendor_user: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
-const DEMO_USERS: User[] = [
-  { id: "1", fullName: "Rajesh Kumar", email: "owner@demo.textile-os.com", role: "factory_owner", department: "Management", isActive: true, lastLogin: "2026-02-26T08:30:00Z" },
-  { id: "2", fullName: "Anand Selvam", email: "production@demo.textile-os.com", role: "production_manager", department: "Production", isActive: true, lastLogin: "2026-02-26T07:15:00Z" },
-  { id: "3", fullName: "Priya Nair", email: "merchandiser@demo.textile-os.com", role: "merchandiser", department: "Merchandising", isActive: true, lastLogin: "2026-02-25T16:45:00Z" },
-  { id: "4", fullName: "Karthik Rajan", email: "quality@demo.textile-os.com", role: "quality_manager", department: "Quality", isActive: true, lastLogin: "2026-02-26T06:00:00Z" },
-  { id: "5", fullName: "Meenakshi Devi", email: "purchase@demo.textile-os.com", role: "purchase_manager", department: "Purchase", isActive: true, lastLogin: "2026-02-24T14:20:00Z" },
-  { id: "6", fullName: "Suresh Babu", email: "store@demo.textile-os.com", role: "store_manager", department: "Stores", isActive: true, lastLogin: "2026-02-23T09:10:00Z" },
-  { id: "7", fullName: "Lalitha Krishnan", email: "finance@demo.textile-os.com", role: "finance_manager", department: "Finance", isActive: false, lastLogin: "2026-02-20T11:00:00Z" },
-  { id: "8", fullName: "Murugan Pillai", email: "dyeing@demo.textile-os.com", role: "dyeing_master", department: "Dyeing", isActive: true, lastLogin: "2026-02-25T08:00:00Z" },
-];
-
-const CURRENT_USER_ID = "1";
-
 function formatLastLogin(iso: string | null): string {
   if (!iso) return "Never";
   const d = new Date(iso);
@@ -125,12 +109,15 @@ function formatLastLogin(iso: string | null): string {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = React.useState<User[]>(DEMO_USERS);
+  const { companyId, userId } = useCompany();
+  const [users, setUsers] = React.useState<Profile[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState("all");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const [editingUser, setEditingUser] = React.useState<User | null>(null);
+  const [editingUser, setEditingUser] = React.useState<Profile | null>(null);
+  const [inviting, setInviting] = React.useState(false);
 
   const [inviteForm, setInviteForm] = React.useState({
     fullName: "",
@@ -139,57 +126,109 @@ export default function UsersPage() {
     department: "",
   });
 
+  const fetchUsers = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getCompanyUsers(companyId);
+      if (error) {
+        toast.error("Failed to load users");
+        return;
+      }
+      setUsers(data ?? []);
+    } catch {
+      toast.error("Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
   const filtered = users.filter((u) => {
     const matchSearch =
       search === "" ||
-      u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === "all" || u.role === roleFilter;
     const matchStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" ? u.isActive : !u.isActive);
+      (statusFilter === "active" ? u.is_active : !u.is_active);
     return matchSearch && matchRole && matchStatus;
   });
 
-  const handleInvite = () => {
+  const handleInvite = async () => {
     if (!inviteForm.fullName || !inviteForm.email || !inviteForm.role) {
       toast.error("Please fill in all required fields.");
       return;
     }
-    const newUser: User = {
-      id: String(Date.now()),
-      fullName: inviteForm.fullName,
-      email: inviteForm.email,
-      role: inviteForm.role as Role,
-      department: inviteForm.department || null,
-      isActive: true,
-      lastLogin: null,
-    };
-    setUsers((prev) => [...prev, newUser]);
-    setSheetOpen(false);
-    setInviteForm({ fullName: "", email: "", role: "", department: "" });
-    toast.success(`Invitation sent to ${inviteForm.email}`);
-  };
-
-  const handleToggleStatus = (id: string) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === id ? { ...u, isActive: !u.isActive } : u
-      )
-    );
-    const user = users.find((u) => u.id === id);
-    if (user) {
-      toast.success(
-        `${user.fullName} has been ${user.isActive ? "deactivated" : "activated"}.`
-      );
+    setInviting(true);
+    try {
+      const res = await fetch("/api/users/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: inviteForm.fullName,
+          email: inviteForm.email,
+          role: inviteForm.role,
+          department: inviteForm.department || null,
+          companyId,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "Failed to invite user");
+        return;
+      }
+      setSheetOpen(false);
+      setInviteForm({ fullName: "", email: "", role: "", department: "" });
+      toast.success(`Invitation sent to ${inviteForm.email}`);
+      fetchUsers();
+    } catch {
+      toast.error("Failed to invite user");
+    } finally {
+      setInviting(false);
     }
   };
 
-  const handleUpdateRole = (id: string, role: Role) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, role } : u))
-    );
-    toast.success("Role updated successfully.");
+  const handleToggleStatus = async (id: string) => {
+    const user = users.find((u) => u.id === id);
+    if (!user) return;
+    const newStatus = !user.is_active;
+    try {
+      const { error } = await toggleUserStatus(id, newStatus);
+      if (error) {
+        toast.error("Failed to update user status");
+        return;
+      }
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === id ? { ...u, is_active: newStatus } : u
+        )
+      );
+      toast.success(
+        `${user.full_name} has been ${newStatus ? "activated" : "deactivated"}.`
+      );
+    } catch {
+      toast.error("Failed to update user status");
+    }
+  };
+
+  const handleUpdateRole = async (id: string, role: Role) => {
+    try {
+      const { error } = await updateUserRole(id, role);
+      if (error) {
+        toast.error("Failed to update role");
+        return;
+      }
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, role } : u))
+      );
+      toast.success("Role updated successfully.");
+    } catch {
+      toast.error("Failed to update role");
+    }
   };
 
   return (
@@ -246,158 +285,164 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Role
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hidden sm:table-cell">
-                  Department
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hidden lg:table-cell">
-                  Last Login
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((user) => {
-                const roleClass =
-                  ROLE_COLORS[user.role] ?? "border-gray-200 bg-gray-50 text-gray-700";
-                const isCurrentUser = user.id === CURRENT_USER_ID;
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Role
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hidden sm:table-cell">
+                    Department
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hidden lg:table-cell">
+                    Last Login
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((user) => {
+                  const roleClass =
+                    ROLE_COLORS[user.role] ?? "border-gray-200 bg-gray-50 text-gray-700";
+                  const isCurrentUser = user.id === userId;
 
-                return (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
-                          {user.fullName
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium text-gray-900">
-                              {user.fullName}
-                            </span>
-                            {isCurrentUser && (
-                              <span className="rounded bg-blue-100 px-1 py-0.5 text-[10px] font-medium text-blue-700">
-                                You
-                              </span>
-                            )}
+                  return (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
+                            {user.full_name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)}
                           </div>
-                          <p className="text-xs text-gray-500">{user.email}</p>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium text-gray-900">
+                                {user.full_name}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="rounded bg-blue-100 px-1 py-0.5 text-[10px] font-medium text-blue-700">
+                                  You
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">{user.email}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          "rounded-md border px-2 py-0.5 text-xs font-semibold",
-                          roleClass
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                            roleClass
+                          )}
+                        >
+                          {ROLE_LABELS[user.role as Role] ?? user.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
+                        {user.department ?? "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {user.is_active ? (
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                            <span className="text-xs font-medium text-green-700">
+                              Active
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <XCircle className="h-3.5 w-3.5 text-gray-400" />
+                            <span className="text-xs font-medium text-gray-500">
+                              Inactive
+                            </span>
+                          </div>
                         )}
-                      >
-                        {ROLE_LABELS[user.role]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 hidden sm:table-cell">
-                      {user.department ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {user.isActive ? (
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                          <span className="text-xs font-medium text-green-700">
-                            Active
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <XCircle className="h-3.5 w-3.5 text-gray-400" />
-                          <span className="text-xs font-medium text-gray-500">
-                            Inactive
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                      {formatLastLogin(user.lastLogin)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="User actions"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditingUser(user);
-                              setSheetOpen(true);
-                            }}
-                          >
-                            <Shield className="mr-2 h-4 w-4" />
-                            Edit Role
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleToggleStatus(user.id)}
-                            disabled={isCurrentUser}
-                            className={
-                              user.isActive
-                                ? "text-red-600 focus:text-red-700"
-                                : "text-green-600 focus:text-green-700"
-                            }
-                          >
-                            {user.isActive ? (
-                              <>
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Activate
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
+                        {formatLastLogin(user.last_login_at)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label="User actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingUser(user);
+                                setSheetOpen(true);
+                              }}
+                            >
+                              <Shield className="mr-2 h-4 w-4" />
+                              Edit Role
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(user.id)}
+                              disabled={isCurrentUser}
+                              className={
+                                user.is_active
+                                  ? "text-red-600 focus:text-red-700"
+                                  : "text-green-600 focus:text-green-700"
+                              }
+                            >
+                              {user.is_active ? (
+                                <>
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-sm text-gray-500"
+                    >
+                      No users match your filters.
                     </td>
                   </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="py-8 text-center text-sm text-gray-500"
-                  >
-                    No users match your filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
           Showing {filtered.length} of {users.length} users
         </div>
@@ -411,7 +456,7 @@ export default function UsersPage() {
         <SheetContent>
           <SheetHeader>
             <SheetTitle>
-              {editingUser ? `Edit User: ${editingUser.fullName}` : "Invite New User"}
+              {editingUser ? `Edit User: ${editingUser.full_name}` : "Invite New User"}
             </SheetTitle>
           </SheetHeader>
 
@@ -487,7 +532,8 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full mt-2" onClick={handleInvite}>
+                <Button className="w-full mt-2" onClick={handleInvite} disabled={inviting}>
+                  {inviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Send Invitation
                 </Button>
               </>
@@ -495,7 +541,7 @@ export default function UsersPage() {
               <>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <p className="text-sm font-medium text-gray-900">
-                    {editingUser.fullName}
+                    {editingUser.full_name}
                   </p>
                   <p className="text-xs text-gray-500">{editingUser.email}</p>
                 </div>
@@ -506,10 +552,10 @@ export default function UsersPage() {
                     onValueChange={(v) => {
                       handleUpdateRole(editingUser.id, v as Role);
                       setEditingUser((prev) =>
-                        prev ? { ...prev, role: v as Role } : null
+                        prev ? { ...prev, role: v } : null
                       );
                     }}
-                    disabled={editingUser.id === CURRENT_USER_ID}
+                    disabled={editingUser.id === userId}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -522,7 +568,7 @@ export default function UsersPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {editingUser.id === CURRENT_USER_ID && (
+                  {editingUser.id === userId && (
                     <p className="text-xs text-gray-400">
                       You cannot change your own role.
                     </p>

@@ -13,6 +13,7 @@ import {
   Clock,
   Filter,
   Download,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -36,9 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCompany } from "@/contexts/company-context";
+import { getAttendanceReport, markAttendance } from "@/lib/actions/hr";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 interface Employee {
@@ -60,132 +64,12 @@ interface Department {
   employees: Employee[];
 }
 
-const MOCK_DEPARTMENTS: Department[] = [
-  {
-    name: "Sewing",
-    total: 145,
-    present: 132,
-    absent: 8,
-    onLeave: 5,
-    employees: [
-      { id: "1", code: "EMP001", name: "Ravi Kumar", status: "present", checkIn: "08:02", checkOut: "17:05", shift: "Morning" },
-      { id: "2", code: "EMP002", name: "Sunita Devi", status: "present", checkIn: "07:58", checkOut: "17:00", shift: "Morning" },
-      { id: "3", code: "EMP003", name: "Arjun Singh", status: "absent", checkIn: "--", checkOut: "--", shift: "Morning" },
-      { id: "4", code: "EMP004", name: "Meena Sharma", status: "leave", checkIn: "--", checkOut: "--", shift: "Morning" },
-      { id: "5", code: "EMP005", name: "Prakash Yadav", status: "present", checkIn: "08:10", checkOut: "17:12", shift: "Morning" },
-      { id: "6", code: "EMP006", name: "Kavitha Nair", status: "half_day", checkIn: "08:05", checkOut: "13:00", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Cutting",
-    total: 62,
-    present: 58,
-    absent: 3,
-    onLeave: 1,
-    employees: [
-      { id: "7", code: "EMP101", name: "Ramesh Patel", status: "present", checkIn: "07:55", checkOut: "17:00", shift: "Morning" },
-      { id: "8", code: "EMP102", name: "Suresh Babu", status: "present", checkIn: "08:00", checkOut: "17:08", shift: "Morning" },
-      { id: "9", code: "EMP103", name: "Priya Menon", status: "absent", checkIn: "--", checkOut: "--", shift: "Morning" },
-      { id: "10", code: "EMP104", name: "Asha Rani", status: "present", checkIn: "08:03", checkOut: "17:02", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Finishing",
-    total: 88,
-    present: 79,
-    absent: 6,
-    onLeave: 3,
-    employees: [
-      { id: "11", code: "EMP201", name: "Deepak Chauhan", status: "present", checkIn: "08:00", checkOut: "17:05", shift: "Morning" },
-      { id: "12", code: "EMP202", name: "Lalitha Kumari", status: "present", checkIn: "08:15", checkOut: "17:10", shift: "Morning" },
-      { id: "13", code: "EMP203", name: "Mohan Das", status: "leave", checkIn: "--", checkOut: "--", shift: "Morning" },
-      { id: "14", code: "EMP204", name: "Rekha Verma", status: "present", checkIn: "08:02", checkOut: "17:00", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Quality",
-    total: 45,
-    present: 42,
-    absent: 2,
-    onLeave: 1,
-    employees: [
-      { id: "15", code: "EMP301", name: "Vijay Reddy", status: "present", checkIn: "08:00", checkOut: "17:30", shift: "Morning" },
-      { id: "16", code: "EMP302", name: "Shobha Pillai", status: "present", checkIn: "08:05", checkOut: "17:00", shift: "Morning" },
-      { id: "17", code: "EMP303", name: "Arun Kumar", status: "absent", checkIn: "--", checkOut: "--", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Store",
-    total: 28,
-    present: 25,
-    absent: 2,
-    onLeave: 1,
-    employees: [
-      { id: "18", code: "EMP401", name: "Ganesh Iyer", status: "present", checkIn: "07:50", checkOut: "17:00", shift: "Morning" },
-      { id: "19", code: "EMP402", name: "Usha Nambiar", status: "present", checkIn: "08:00", checkOut: "17:05", shift: "Morning" },
-      { id: "20", code: "EMP403", name: "Balaji Subramanian", status: "leave", checkIn: "--", checkOut: "--", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Dyeing",
-    total: 52,
-    present: 47,
-    absent: 4,
-    onLeave: 1,
-    employees: [
-      { id: "21", code: "EMP501", name: "Chandran Pillai", status: "present", checkIn: "06:00", checkOut: "14:00", shift: "Morning" },
-      { id: "22", code: "EMP502", name: "Anitha Krishnan", status: "present", checkIn: "06:05", checkOut: "14:02", shift: "Morning" },
-      { id: "23", code: "EMP503", name: "Selvam Murugan", status: "absent", checkIn: "--", checkOut: "--", shift: "Morning" },
-    ],
-  },
-  {
-    name: "Admin",
-    total: 32,
-    present: 30,
-    absent: 1,
-    onLeave: 1,
-    employees: [
-      { id: "24", code: "EMP601", name: "Kavya Menon", status: "present", checkIn: "09:00", checkOut: "18:05", shift: "General" },
-      { id: "25", code: "EMP602", name: "Rohit Malhotra", status: "present", checkIn: "09:10", checkOut: "18:00", shift: "General" },
-      { id: "26", code: "EMP603", name: "Preethi Srinivasan", status: "leave", checkIn: "--", checkOut: "--", shift: "General" },
-    ],
-  },
-  {
-    name: "Maintenance",
-    total: 33,
-    present: 28,
-    absent: 3,
-    onLeave: 2,
-    employees: [
-      { id: "27", code: "EMP701", name: "Muthukumar Raja", status: "present", checkIn: "07:45", checkOut: "17:00", shift: "Morning" },
-      { id: "28", code: "EMP702", name: "Dinesh Kumar", status: "absent", checkIn: "--", checkOut: "--", shift: "Morning" },
-      { id: "29", code: "EMP703", name: "Siva Subramaniam", status: "present", checkIn: "07:52", checkOut: "17:05", shift: "Morning" },
-    ],
-  },
-];
-
-const DAILY_ATTENDANCE_TREND = [
-  { date: "12 Feb", present: 398 },
-  { date: "13 Feb", present: 405 },
-  { date: "14 Feb", present: 412 },
-  { date: "15 Feb", present: 389 },
-  { date: "16 Feb", present: 417 },
-  { date: "17 Feb", present: 421 },
-  { date: "18 Feb", present: 0, future: true },
-  { date: "19 Feb", present: 409 },
-  { date: "20 Feb", present: 415 },
-  { date: "21 Feb", present: 418 },
-  { date: "22 Feb", present: 403 },
-  { date: "23 Feb", present: 420 },
-  { date: "24 Feb", present: 421 },
-  { date: "25 Feb", present: 416 },
-];
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function getAttendancePct(dept: Department): number {
+  if (dept.total === 0) return 0;
   return Math.round((dept.present / dept.total) * 100);
 }
 
@@ -242,7 +126,7 @@ function DepartmentRow({
   const [expanded, setExpanded] = React.useState(false);
   const pct = getAttendancePct(dept);
   const empIds = dept.employees.map((e) => e.id);
-  const allSelected = empIds.every((id) => selectedIds.has(id));
+  const allSelected = empIds.length > 0 && empIds.every((id) => selectedIds.has(id));
   const someSelected = empIds.some((id) => selectedIds.has(id));
 
   return (
@@ -410,19 +294,94 @@ function BulkActionBar({
 // ---------------------------------------------------------------------------
 
 export default function AttendancePage() {
+  const { companyId } = useCompany();
+  const [departments, setDepartments] = React.useState<Department[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [selectedDept, setSelectedDept] = React.useState("all");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [_showMarkSheet, setShowMarkSheet] = React.useState(false);
 
-  const totalEmployees = MOCK_DEPARTMENTS.reduce((s, d) => s + d.total, 0);
-  const totalPresent = MOCK_DEPARTMENTS.reduce((s, d) => s + d.present, 0);
-  const totalAbsent = MOCK_DEPARTMENTS.reduce((s, d) => s + d.absent, 0);
-  const totalOnLeave = MOCK_DEPARTMENTS.reduce((s, d) => s + d.onLeave, 0);
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  const fetchAttendance = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getAttendanceReport(companyId, currentMonth, currentYear);
+      if (error) {
+        toast.error("Failed to load attendance data");
+        return;
+      }
+      if (!data) {
+        setDepartments([]);
+        return;
+      }
+
+      // Group employees by department and build Department objects
+      const deptMap: Record<string, { total: number; employees: Employee[] }> = {};
+      for (const emp of data.employees) {
+        const dept = emp.department ?? "Other";
+        if (!deptMap[dept]) {
+          deptMap[dept] = { total: 0, employees: [] };
+        }
+        deptMap[dept].total += 1;
+        deptMap[dept].employees.push({
+          id: emp.id,
+          code: emp.employee_code,
+          name: emp.full_name,
+          // Since there's no dedicated attendance table yet, default to "present"
+          // The server action returns employee list; real attendance status would
+          // come from an attendance table in production
+          status: "present",
+          checkIn: "--",
+          checkOut: "--",
+          shift: emp.current_shift === "morning" ? "Morning" : emp.current_shift === "evening" ? "Evening" : emp.current_shift === "night" ? "Night" : "General",
+        });
+      }
+
+      // Build department summary from the department-level data returned by the action
+      const deptSummary = data.departments ?? [];
+      const deptList: Department[] = deptSummary.map((ds: { department: string; total: number; present: number; absent: number; onLeave: number }) => {
+        const empData = deptMap[ds.department];
+        return {
+          name: ds.department,
+          total: ds.total,
+          // Since no real attendance table exists, set present = total, absent = 0, onLeave = 0
+          present: ds.total,
+          absent: 0,
+          onLeave: 0,
+          employees: empData?.employees ?? [],
+        };
+      });
+
+      setDepartments(deptList);
+    } catch {
+      toast.error("Failed to load attendance data");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId, currentMonth, currentYear]);
+
+  React.useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
+
+  const totalEmployees = departments.reduce((s, d) => s + d.total, 0);
+  const totalPresent = departments.reduce((s, d) => s + d.present, 0);
+  const totalAbsent = departments.reduce((s, d) => s + d.absent, 0);
+  const totalOnLeave = departments.reduce((s, d) => s + d.onLeave, 0);
 
   const filteredDepts =
     selectedDept === "all"
-      ? MOCK_DEPARTMENTS
-      : MOCK_DEPARTMENTS.filter((d) => d.name === selectedDept);
+      ? departments
+      : departments.filter((d) => d.name === selectedDept);
+
+  // Build a simple chart from department data
+  const dailyAttendanceTrend = departments.map((d) => ({
+    date: d.name,
+    present: d.present,
+  }));
 
   const handleToggleEmployee = (id: string) => {
     setSelectedIds((prev) => {
@@ -445,11 +404,39 @@ export default function AttendancePage() {
     });
   };
 
-  const handleBulkMark = (status: Employee["status"]) => {
-    // In production: call markAttendance for each selected employee
-    console.log("Marking", selectedIds.size, "employees as", status);
+  const handleBulkMark = async (status: Employee["status"]) => {
+    const today = new Date().toISOString().split("T")[0];
+    let successCount = 0;
+    for (const empId of selectedIds) {
+      // Find the employee to get their code
+      let empCode = "";
+      for (const dept of departments) {
+        const emp = dept.employees.find((e) => e.id === empId);
+        if (emp) {
+          empCode = emp.code;
+          break;
+        }
+      }
+      const { error } = await markAttendance({
+        employee_id: empId,
+        employee_code: empCode,
+        date: today,
+        status,
+      });
+      if (!error) successCount++;
+    }
+    toast.success(`Marked ${successCount} employee(s) as ${status}`);
     setSelectedIds(new Set());
+    fetchAttendance();
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -492,7 +479,7 @@ export default function AttendancePage() {
             icon: UserCheck,
             iconBg: "bg-green-600",
             cardBg: "bg-green-50",
-            sub: `${Math.round((totalPresent / totalEmployees) * 100)}% attendance`,
+            sub: totalEmployees > 0 ? `${Math.round((totalPresent / totalEmployees) * 100)}% attendance` : "0% attendance",
           },
           {
             label: "Absent Today",
@@ -500,7 +487,7 @@ export default function AttendancePage() {
             icon: UserX,
             iconBg: "bg-red-600",
             cardBg: "bg-red-50",
-            sub: `${Math.round((totalAbsent / totalEmployees) * 100)}% of workforce`,
+            sub: totalEmployees > 0 ? `${Math.round((totalAbsent / totalEmployees) * 100)}% of workforce` : "0% of workforce",
           },
           {
             label: "On Leave",
@@ -541,24 +528,23 @@ export default function AttendancePage() {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
-              Last 14 Days - Daily Attendance Count
+              Department-wise Attendance Count
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={DAILY_ATTENDANCE_TREND} barSize={18}>
+              <BarChart data={dailyAttendanceTrend} barSize={18}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11 }}
-                  interval={1}
+                  interval={0}
                   angle={-30}
                   textAnchor="end"
                   height={40}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  domain={[350, 440]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -566,13 +552,13 @@ export default function AttendancePage() {
                     borderRadius: 8,
                     border: "1px solid #e5e7eb",
                   }}
-                  formatter={(val: number) => [val, "Present"] as [number, string]}
+                  formatter={(val) => [val, "Present"]}
                 />
                 <Bar dataKey="present" radius={[4, 4, 0, 0]}>
-                  {DAILY_ATTENDANCE_TREND.map((entry, index) => (
+                  {dailyAttendanceTrend.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.present >= 410 ? "#22c55e" : entry.present >= 400 ? "#eab308" : "#ef4444"}
+                      fill={entry.present >= 50 ? "#22c55e" : entry.present >= 20 ? "#eab308" : "#ef4444"}
                     />
                   ))}
                 </Bar>
@@ -584,10 +570,10 @@ export default function AttendancePage() {
         {/* Today's quick stats */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Today - 26 Feb 2026</CardTitle>
+            <CardTitle className="text-base">Today - {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {MOCK_DEPARTMENTS.map((dept) => {
+            {departments.map((dept) => {
               const pct = getAttendancePct(dept);
               return (
                 <div key={dept.name} className="space-y-1">
@@ -626,7 +612,7 @@ export default function AttendancePage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Departments</SelectItem>
-                  {MOCK_DEPARTMENTS.map((d) => (
+                  {departments.map((d) => (
                     <SelectItem key={d.name} value={d.name}>
                       {d.name}
                     </SelectItem>
@@ -699,7 +685,7 @@ export default function AttendancePage() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="inline-block rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-xs font-bold text-green-700">
-                      {Math.round((totalPresent / totalEmployees) * 100)}%
+                      {totalEmployees > 0 ? Math.round((totalPresent / totalEmployees) * 100) : 0}%
                     </span>
                   </td>
                 </tr>

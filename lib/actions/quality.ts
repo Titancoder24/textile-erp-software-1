@@ -113,6 +113,64 @@ export async function getInspections(
   return { data, error: null };
 }
 
+export async function getInspectionById(inspectionId: string) {
+  const supabase = await createClient();
+
+  if (!inspectionId) {
+    return { data: null, error: "Inspection ID is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("inspections")
+    .select(
+      `
+      *,
+      sales_orders ( id, order_number, product_name, buyer_id, buyers ( id, name ) ),
+      work_orders ( id, wo_number ),
+      inspection_defects ( id, defect_type, defect_location, severity, quantity, notes ),
+      inspector:profiles!inspector_id ( id, full_name ),
+      inspection_templates ( id, name )
+    `
+    )
+    .eq("id", inspectionId)
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
+export async function getInspectionByNumber(inspectionNumber: string) {
+  const supabase = await createClient();
+
+  if (!inspectionNumber) {
+    return { data: null, error: "Inspection number is required" };
+  }
+
+  const { data, error } = await supabase
+    .from("inspections")
+    .select(
+      `
+      *,
+      sales_orders ( id, order_number, product_name, buyer_id, buyers ( id, name ) ),
+      work_orders ( id, wo_number ),
+      inspection_defects ( id, defect_type, defect_location, severity, quantity, notes ),
+      inspector:profiles!inspector_id ( id, full_name ),
+      inspection_templates ( id, name )
+    `
+    )
+    .eq("inspection_number", inspectionNumber)
+    .single();
+
+  if (error) {
+    return { data: null, error: error.message };
+  }
+
+  return { data, error: null };
+}
+
 export async function createInspection(
   data: Omit<InspectionInsert, "inspection_number">
 ) {

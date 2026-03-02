@@ -59,12 +59,7 @@ export async function getShipments(
 
   let query = supabase
     .from("shipments")
-    .select(
-      `
-      *,
-      buyers ( id, name, code, country )
-    `
-    )
+    .select("*, buyers ( id, name, code, country )")
     .eq("company_id", companyId)
     .order("planned_shipment_date", { ascending: true });
 

@@ -79,12 +79,12 @@ export function MerchandiserDashboard({ companyId }: MerchandiserDashboardProps)
             .in("status", ["confirmed", "in_production", "ready_to_ship", "shipped"]),
           supabase
             .from("samples")
-            .select("id, sample_type, status, required_date, sales_order_id, sales_orders(order_number), buyers(name)")
+            .select("id, sample_type, status, required_date, order_id, sales_orders:order_id(order_number), buyers:buyer_id(name)")
             .eq("company_id", companyId)
             .not("status", "in", '("approved","rejected","cancelled")'),
           supabase
             .from("tna_milestones")
-            .select("id, milestone_name, planned_date, delay_days, sales_orders(order_number)")
+            .select("id, milestone_name, planned_date, delay_days, sales_orders:order_id(order_number)")
             .lt("planned_date", today)
             .eq("status", "pending")
             .order("planned_date"),

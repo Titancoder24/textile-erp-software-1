@@ -462,7 +462,7 @@ export default function FinancePage() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`${value}%`, "Share"]}
+                    formatter={(value) => [`${value}%`, "Share"]}
                     contentStyle={TOOLTIP_STYLE}
                   />
                 </PieChart>
@@ -516,7 +516,7 @@ export default function FinancePage() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`${value}%`, "Share"]}
+                    formatter={(value) => [`${value}%`, "Share"]}
                     contentStyle={TOOLTIP_STYLE}
                   />
                 </PieChart>

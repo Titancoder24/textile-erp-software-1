@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { createSize, updateSize } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Size = Database["public"]["Tables"]["sizes"]["Row"]
@@ -24,11 +25,12 @@ type SizeFormValues = z.infer<typeof sizeSchema>
 
 interface SizeFormProps {
   size?: Size | null
+  companyId: string
   onSuccess: (size: Size) => void
   onCancel?: () => void
 }
 
-export function SizeForm({ size, onSuccess, onCancel }: SizeFormProps) {
+export function SizeForm({ size, companyId, onSuccess, onCancel }: SizeFormProps) {
   const isEdit = !!size
 
   const {
@@ -57,21 +59,25 @@ export function SizeForm({ size, onSuccess, onCancel }: SizeFormProps) {
 
   async function onSubmit(values: SizeFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Size = {
-        id: size?.id ?? crypto.randomUUID(),
-        company_id: size?.company_id ?? "",
-        created_at: size?.created_at ?? new Date().toISOString(),
+      const payload = {
         name: values.name,
         code: values.code,
         sort_order: values.sort_order,
       }
 
-      toast.success(isEdit ? "Size updated" : "Size created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save size. Please try again.")
+      if (isEdit && size) {
+        const { data: result, error } = await updateSize(size.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Size updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createSize({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Size created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save size. Please try again.")
     }
   }
 

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createProduct, updateProduct } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Product = Database["public"]["Tables"]["products"]["Row"]
@@ -46,11 +47,12 @@ type ProductFormValues = z.infer<typeof productSchema>
 
 interface ProductFormProps {
   product?: Product | null
+  companyId: string
   onSuccess: (product: Product) => void
   onCancel?: () => void
 }
 
-export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) {
+export function ProductForm({ product, companyId, onSuccess, onCancel }: ProductFormProps) {
   const isEdit = !!product
 
   const {
@@ -90,25 +92,28 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   async function onSubmit(values: ProductFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Product = {
-        id: product?.id ?? crypto.randomUUID(),
-        company_id: product?.company_id ?? "",
-        created_at: product?.created_at ?? new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        buyer_id: values.buyer_id || null,
+      const payload = {
         style_code: values.style_code,
         name: values.name,
         category: values.category,
         description: values.description || null,
+        buyer_id: values.buyer_id || null,
         is_active: values.is_active,
       }
 
-      toast.success(isEdit ? "Product updated" : "Product created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save product.")
+      if (isEdit && product) {
+        const { data: result, error } = await updateProduct(product.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Product updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createProduct({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Product created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save product.")
     }
   }
 

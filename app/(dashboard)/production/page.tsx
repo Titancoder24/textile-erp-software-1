@@ -284,14 +284,14 @@ export default function ProductionPage() {
                     <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
                     <YAxis type="category" dataKey="line" tick={{ fontSize: 11 }} width={48} />
                     <Tooltip
-                      formatter={(val: number) => [`${val}%`, "Efficiency"]}
+                      formatter={(val) => [`${val}%`, "Efficiency"]}
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
                     />
                     <Bar
                       dataKey="efficiency"
                       radius={[0, 4, 4, 0]}
                       fill="#22c55e"
-                      label={{ position: "right", fontSize: 10, formatter: (v: number) => `${v}%` }}
+                      label={{ position: "right", fontSize: 10, formatter: (v) => `${v}%` }}
                     >
                       {LINE_EFFICIENCY.map((entry, index) => (
                         <rect

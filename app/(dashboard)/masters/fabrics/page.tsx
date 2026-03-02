@@ -5,6 +5,8 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Pencil, Trash2, Plus, MoreHorizontal } from "lucide-react"
 import { toast } from "sonner"
 
+import { useCompany } from "@/contexts/company-context"
+import { getFabrics, deleteFabric } from "@/lib/actions/masters"
 import { PageHeader } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,38 +40,8 @@ const FABRIC_TYPE_LABELS: Record<string, string> = {
   non_woven: "Non-Woven",
 }
 
-const MOCK_FABRICS: Fabric[] = [
-  {
-    id: "f1", company_id: "c1", name: "Single Jersey 160 GSM", code: "SJ160",
-    fabric_type: "knitted", construction: "20s Combed", gsm: 160, width_cm: 150,
-    weave_type: null, composition: "100% Cotton", uom: "kg", rate: 320,
-    supplier_id: "s1", is_active: true,
-    created_at: "2024-01-01T00:00:00Z", updated_at: "2024-01-01T00:00:00Z",
-  },
-  {
-    id: "f2", company_id: "c1", name: "Cotton Poplin", code: "CPO45",
-    fabric_type: "woven", construction: "40x40 / 133x72", gsm: 120, width_cm: 145,
-    weave_type: "Plain", composition: "100% Cotton", uom: "meter", rate: 180,
-    supplier_id: "s1", is_active: true,
-    created_at: "2024-01-02T00:00:00Z", updated_at: "2024-01-02T00:00:00Z",
-  },
-  {
-    id: "f3", company_id: "c1", name: "Pique Mesh 220 GSM", code: "PM220",
-    fabric_type: "knitted", construction: "24s Carded", gsm: 220, width_cm: 165,
-    weave_type: null, composition: "65% Polyester / 35% Cotton", uom: "kg", rate: 290,
-    supplier_id: null, is_active: true,
-    created_at: "2024-01-03T00:00:00Z", updated_at: "2024-01-03T00:00:00Z",
-  },
-  {
-    id: "f4", company_id: "c1", name: "Twill Denim 10oz", code: "TD10",
-    fabric_type: "woven", construction: "7x6 / 68x45", gsm: 340, width_cm: 152,
-    weave_type: "Twill", composition: "100% Cotton", uom: "meter", rate: 420,
-    supplier_id: "s1", is_active: false,
-    created_at: "2024-01-04T00:00:00Z", updated_at: "2024-01-04T00:00:00Z",
-  },
-]
-
 export default function FabricsPage() {
+  const { companyId } = useCompany()
   const [fabrics, setFabrics] = useState<Fabric[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -79,14 +51,18 @@ export default function FabricsPage() {
   const fetchFabrics = useCallback(async () => {
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 300))
-      setFabrics(MOCK_FABRICS)
+      const { data, error } = await getFabrics(companyId)
+      if (error) {
+        toast.error("Failed to load fabrics")
+        return
+      }
+      setFabrics(data ?? [])
     } catch {
       toast.error("Failed to load fabrics")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     fetchFabrics()
@@ -119,7 +95,11 @@ export default function FabricsPage() {
   async function handleDelete() {
     if (!deletingFabric) return
     try {
-      await new Promise((r) => setTimeout(r, 400))
+      const { error } = await deleteFabric(deletingFabric.id)
+      if (error) {
+        toast.error("Failed to delete fabric")
+        return
+      }
       setFabrics((prev) => prev.filter((f) => f.id !== deletingFabric.id))
       toast.success("Fabric deleted")
     } catch {
@@ -280,6 +260,7 @@ export default function FabricsPage() {
         footer={null}
       >
         <FabricForm
+          companyId={companyId}
           fabric={editingFabric}
           onSuccess={handleSuccess}
           onCancel={() => {

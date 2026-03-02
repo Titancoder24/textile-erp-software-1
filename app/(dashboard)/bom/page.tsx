@@ -51,6 +51,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { useCompany } from "@/contexts/company-context";
+import { getBOMs, getBOM, createBOM, cloneBOM } from "@/lib/actions/bom";
+import { getProducts } from "@/lib/actions/masters";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,134 +84,11 @@ interface BOM {
   notes: string;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data
-// ---------------------------------------------------------------------------
-
-const MOCK_BOMS: BOM[] = [
-  {
-    id: "1",
-    name: "Men's Polo Shirt BOM v2",
-    productName: "Men's Polo Shirt",
-    styleCode: "MPS-24-001",
-    version: 2,
-    status: "active",
-    totalCost: 312.40,
-    createdAt: "2026-01-15",
-    notes: "Updated after buyer sampling. Approved by QC.",
-    items: [
-      { id: "i1", name: "Cotton Pique Fabric (200 GSM)", type: "fabric", qtyPerPiece: 0.55, uom: "meter", rate: 280, wastagePercent: 5, amount: 161.70 },
-      { id: "i2", name: "Polyester Rib (Collar & Cuffs)", type: "fabric", qtyPerPiece: 0.08, uom: "meter", rate: 180, wastagePercent: 3, amount: 14.83 },
-      { id: "i3", name: "Polo Button (Horn Look)", type: "trim", qtyPerPiece: 3, uom: "piece", rate: 2.5, wastagePercent: 2, amount: 7.65 },
-      { id: "i4", name: "Woven Label (Brand)", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 8, wastagePercent: 0, amount: 8.00 },
-      { id: "i5", name: "Care Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 3, wastagePercent: 0, amount: 3.00 },
-      { id: "i6", name: "Sewing Thread (Polyester)", type: "trim", qtyPerPiece: 0.025, uom: "cone", rate: 220, wastagePercent: 5, amount: 5.78 },
-      { id: "i7", name: "Interlining (Collar)", type: "fabric", qtyPerPiece: 0.04, uom: "meter", rate: 120, wastagePercent: 5, amount: 5.04 },
-      { id: "i8", name: "Hangtag", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 5, wastagePercent: 0, amount: 5.00 },
-      { id: "i9", name: "Polybag", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 4.5, wastagePercent: 0, amount: 4.50 },
-      { id: "i10", name: "Reactive Dye (Navy)", type: "chemical", qtyPerPiece: 0.015, uom: "kg", rate: 450, wastagePercent: 10, amount: 7.43 },
-    ],
-  },
-  {
-    id: "2",
-    name: "Women's Kurta BOM v1",
-    productName: "Women's Ethnic Kurta",
-    styleCode: "WEK-24-005",
-    version: 1,
-    status: "approved",
-    totalCost: 485.80,
-    createdAt: "2026-01-22",
-    notes: "Approved for production run.",
-    items: [
-      { id: "j1", name: "Cotton Voile (65 GSM)", type: "fabric", qtyPerPiece: 2.20, uom: "meter", rate: 160, wastagePercent: 8, amount: 380.16 },
-      { id: "j2", name: "Lace Trim (Border)", type: "trim", qtyPerPiece: 0.80, uom: "meter", rate: 45, wastagePercent: 3, amount: 37.08 },
-      { id: "j3", name: "Small Buttons (Neck)", type: "trim", qtyPerPiece: 5, uom: "piece", rate: 1.5, wastagePercent: 2, amount: 7.65 },
-      { id: "j4", name: "Brand Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 12, wastagePercent: 0, amount: 12.00 },
-      { id: "j5", name: "Cotton Thread", type: "trim", qtyPerPiece: 0.03, uom: "cone", rate: 180, wastagePercent: 5, amount: 5.67 },
-      { id: "j6", name: "Embroidery Thread", type: "trim", qtyPerPiece: 0.01, uom: "cone", rate: 320, wastagePercent: 5, amount: 3.36 },
-      { id: "j7", name: "Polybag", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 5, wastagePercent: 0, amount: 5.00 },
-    ],
-  },
-  {
-    id: "3",
-    name: "Basic Tee BOM v3",
-    productName: "Unisex Basic T-Shirt",
-    styleCode: "UBT-23-010",
-    version: 3,
-    status: "active",
-    totalCost: 198.60,
-    createdAt: "2025-11-05",
-    notes: "Version 3 - reduced fabric wastage from 8% to 5%.",
-    items: [
-      { id: "k1", name: "Cotton Jersey (160 GSM)", type: "fabric", qtyPerPiece: 0.45, uom: "meter", rate: 240, wastagePercent: 5, amount: 113.40 },
-      { id: "k2", name: "Polyester Rib Neck", type: "fabric", qtyPerPiece: 0.05, uom: "meter", rate: 160, wastagePercent: 3, amount: 8.24 },
-      { id: "k3", name: "Brand Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 8, wastagePercent: 0, amount: 8.00 },
-      { id: "k4", name: "Care Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 3, wastagePercent: 0, amount: 3.00 },
-      { id: "k5", name: "Sewing Thread", type: "trim", qtyPerPiece: 0.02, uom: "cone", rate: 200, wastagePercent: 5, amount: 4.20 },
-      { id: "k6", name: "Polybag", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 4, wastagePercent: 0, amount: 4.00 },
-      { id: "k7", name: "Reactive Dye (Black)", type: "chemical", qtyPerPiece: 0.012, uom: "kg", rate: 420, wastagePercent: 10, amount: 5.54 },
-    ],
-  },
-  {
-    id: "4",
-    name: "Denim Jeans BOM v1",
-    productName: "Men's Slim Fit Denim",
-    styleCode: "MSD-24-002",
-    version: 1,
-    status: "draft",
-    totalCost: 672.15,
-    createdAt: "2026-02-01",
-    notes: "Draft pending fabric GSM confirmation from buyer.",
-    items: [
-      { id: "l1", name: "Denim Fabric (360 GSM)", type: "fabric", qtyPerPiece: 1.35, uom: "meter", rate: 380, wastagePercent: 7, amount: 549.09 },
-      { id: "l2", name: "Denim Zipper (YKK)", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 18, wastagePercent: 2, amount: 18.36 },
-      { id: "l3", name: "Copper Rivets", type: "trim", qtyPerPiece: 6, uom: "piece", rate: 3.5, wastagePercent: 2, amount: 21.42 },
-      { id: "l4", name: "Brand Button (Metal)", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 12, wastagePercent: 0, amount: 12.00 },
-      { id: "l5", name: "Sewing Thread (Jeans)", type: "trim", qtyPerPiece: 0.04, uom: "cone", rate: 260, wastagePercent: 5, amount: 10.92 },
-      { id: "l6", name: "Brand Label (Leather Patch)", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 22, wastagePercent: 0, amount: 22.00 },
-      { id: "l7", name: "Potassium Permanganate", type: "chemical", qtyPerPiece: 0.008, uom: "kg", rate: 380, wastagePercent: 5, amount: 3.19 },
-    ],
-  },
-  {
-    id: "5",
-    name: "Kids Hoodie BOM v2",
-    productName: "Kids Fleece Hoodie",
-    styleCode: "KFH-24-008",
-    version: 2,
-    status: "approved",
-    totalCost: 389.25,
-    createdAt: "2026-01-30",
-    notes: "Drawstring removed per EU safety regulation.",
-    items: [
-      { id: "m1", name: "Fleece Fabric (280 GSM)", type: "fabric", qtyPerPiece: 0.80, uom: "meter", rate: 320, wastagePercent: 6, amount: 271.36 },
-      { id: "m2", name: "Poly Rib (Cuffs & Hem)", type: "fabric", qtyPerPiece: 0.15, uom: "meter", rate: 200, wastagePercent: 3, amount: 30.90 },
-      { id: "m3", name: "YKK Zipper (Full Length)", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 28, wastagePercent: 2, amount: 28.56 },
-      { id: "m4", name: "Brand Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 10, wastagePercent: 0, amount: 10.00 },
-      { id: "m5", name: "Sewing Thread", type: "trim", qtyPerPiece: 0.03, uom: "cone", rate: 200, wastagePercent: 5, amount: 6.30 },
-      { id: "m6", name: "Kangaroo Pocket Zip", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 15, wastagePercent: 2, amount: 15.30 },
-      { id: "m7", name: "Polybag + Hanger", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 8.5, wastagePercent: 0, amount: 8.50 },
-    ],
-  },
-  {
-    id: "6",
-    name: "Ladies Blouse BOM v1",
-    productName: "Chiffon Formal Blouse",
-    styleCode: "CFB-24-011",
-    version: 1,
-    status: "draft",
-    totalCost: 284.70,
-    createdAt: "2026-02-10",
-    notes: "New style - awaiting first sample approval.",
-    items: [
-      { id: "n1", name: "Poly Chiffon (60 GSM)", type: "fabric", qtyPerPiece: 1.40, uom: "meter", rate: 140, wastagePercent: 8, amount: 211.68 },
-      { id: "n2", name: "Lining Fabric", type: "fabric", qtyPerPiece: 0.60, uom: "meter", rate: 90, wastagePercent: 5, amount: 56.70 },
-      { id: "n3", name: "Pearl Buttons", type: "trim", qtyPerPiece: 7, uom: "piece", rate: 2, wastagePercent: 2, amount: 14.28 },
-      { id: "n4", name: "Brand Label", type: "trim", qtyPerPiece: 1, uom: "piece", rate: 12, wastagePercent: 0, amount: 12.00 },
-      { id: "n5", name: "Interlining", type: "fabric", qtyPerPiece: 0.05, uom: "meter", rate: 100, wastagePercent: 5, amount: 5.25 },
-      { id: "n6", name: "Polybag", type: "accessory", qtyPerPiece: 1, uom: "piece", rate: 5, wastagePercent: 0, amount: 5.00 },
-    ],
-  },
-];
+interface Product {
+  id: string;
+  name: string;
+  style_code: string;
+}
 
 // ---------------------------------------------------------------------------
 // Status config
@@ -270,6 +151,39 @@ function getCostBreakdown(items: BOMItem[]) {
 }
 
 // ---------------------------------------------------------------------------
+// Map DB rows to UI types
+// ---------------------------------------------------------------------------
+
+function mapBOMFromDB(row: Record<string, unknown>): BOM {
+  const product = row.products as Record<string, unknown> | null;
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    productName: product?.name as string ?? "Unknown Product",
+    styleCode: product?.style_code as string ?? "",
+    version: row.version as number ?? 1,
+    status: (row.status as string ?? "draft") as BOM["status"],
+    totalCost: Number(row.total_cost ?? 0),
+    createdAt: row.created_at as string ?? "",
+    items: [],
+    notes: row.notes as string ?? "",
+  };
+}
+
+function mapBOMItemFromDB(row: Record<string, unknown>): BOMItem {
+  return {
+    id: row.id as string,
+    name: row.item_name as string,
+    type: (row.item_type as string ?? "fabric") as BOMItem["type"],
+    qtyPerPiece: Number(row.quantity_per_piece ?? 0),
+    uom: row.uom as string ?? "meter",
+    rate: Number(row.rate ?? 0),
+    wastagePercent: Number(row.wastage_percent ?? 0),
+    amount: Number(row.amount ?? 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // New BOM form
 // ---------------------------------------------------------------------------
 
@@ -282,8 +196,7 @@ interface NewBOMItem {
 }
 
 interface NewBOMFormState {
-  productName: string;
-  styleCode: string;
+  productId: string;
   name: string;
   version: string;
   notes: string;
@@ -299,8 +212,7 @@ const BLANK_ITEM: NewBOMItem = {
 };
 
 const FORM_DEFAULTS: NewBOMFormState = {
-  productName: "",
-  styleCode: "",
+  productId: "",
   name: "",
   version: "1",
   notes: "",
@@ -313,45 +225,35 @@ function NewBOMForm({
   onItemChange,
   onAddItem,
   onRemoveItem,
+  products,
 }: {
   form: NewBOMFormState;
   onChange: (field: keyof Omit<NewBOMFormState, "items">, value: string) => void;
   onItemChange: (idx: number, field: keyof NewBOMItem, value: string) => void;
   onAddItem: () => void;
   onRemoveItem: (idx: number) => void;
+  products: Product[];
 }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="productName">Product Name *</Label>
-          <Input
-            id="productName"
-            placeholder="e.g. Men's Polo Shirt"
-            value={form.productName}
-            onChange={(e) => onChange("productName", e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="styleCode">Style Code *</Label>
-          <Input
-            id="styleCode"
-            placeholder="e.g. MPS-24-001"
-            value={form.styleCode}
-            onChange={(e) => onChange("styleCode", e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-1.5">
-          <Label htmlFor="bomName">BOM Name *</Label>
-          <Input
-            id="bomName"
-            placeholder="e.g. Men's Polo Shirt BOM v1"
-            value={form.name}
-            onChange={(e) => onChange("name", e.target.value)}
-          />
+          <Label htmlFor="productId">Product *</Label>
+          <Select
+            value={form.productId}
+            onValueChange={(v) => onChange("productId", v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a product..." />
+            </SelectTrigger>
+            <SelectContent>
+              {products.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name} ({p.style_code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="version">Version</Label>
@@ -363,6 +265,16 @@ function NewBOMForm({
             onChange={(e) => onChange("version", e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="bomName">BOM Name *</Label>
+        <Input
+          id="bomName"
+          placeholder="e.g. Men's Polo Shirt BOM v1"
+          value={form.name}
+          onChange={(e) => onChange("name", e.target.value)}
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -539,35 +451,39 @@ function BOMDetailSheet({
             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Cost Breakdown
             </h4>
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={45}
-                  outerRadius={70}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {chartData.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartTooltip
-                  formatter={(value) =>
-                    [`${formatCurrency(Number(value), "INR")}`, "Cost"]
-                  }
-                />
-                <Legend
-                  iconType="circle"
-                  iconSize={8}
-                  formatter={(value) => (
-                    <span className="text-xs text-gray-600">{value}</span>
-                  )}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={70}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {chartData.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartTooltip
+                    formatter={(value) =>
+                      [`${formatCurrency(Number(value), "INR")}`, "Cost"]
+                    }
+                  />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => (
+                      <span className="text-xs text-gray-600">{value}</span>
+                    )}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400 py-8 text-center">No items</p>
+            )}
           </div>
           <div className="space-y-2">
             {chartData.map((d) => {
@@ -758,31 +674,97 @@ function buildColumns(
 // ---------------------------------------------------------------------------
 
 export default function BOMPage() {
-  const [boms, setBoms] = React.useState<BOM[]>(MOCK_BOMS);
+  const { companyId, userId } = useCompany();
+  const [boms, setBoms] = React.useState<BOM[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [products, setProducts] = React.useState<Product[]>([]);
   const [selectedBOM, setSelectedBOM] = React.useState<BOM | null>(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState<NewBOMFormState>(FORM_DEFAULTS);
 
+  // Fetch BOMs
+  const fetchBOMs = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getBOMs(companyId);
+      if (error) {
+        toast.error("Failed to load BOMs");
+        return;
+      }
+      const mapped: BOM[] = (data ?? []).map((row: Record<string, unknown>) =>
+        mapBOMFromDB(row)
+      );
+      setBoms(mapped);
+    } catch {
+      toast.error("Failed to load BOMs");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  // Fetch products for the form dropdown
+  const fetchProducts = React.useCallback(async () => {
+    try {
+      const { data, error } = await getProducts(companyId);
+      if (error) return;
+      const mapped: Product[] = (data ?? []).map((p: Record<string, unknown>) => ({
+        id: p.id as string,
+        name: p.name as string,
+        style_code: p.style_code as string,
+      }));
+      setProducts(mapped);
+    } catch {
+      // Silently fail - products are for the form dropdown
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchBOMs();
+    fetchProducts();
+  }, [fetchBOMs, fetchProducts]);
+
   const columns = React.useMemo(() => buildColumns(handleOpenDetail), []);
 
-  function handleOpenDetail(bom: BOM) {
-    setSelectedBOM(bom);
-    setDetailOpen(true);
+  // Open detail: fetch full BOM with items
+  async function handleOpenDetail(bom: BOM) {
+    try {
+      const { data, error } = await getBOM(bom.id);
+      if (error || !data) {
+        toast.error("Failed to load BOM details");
+        // Fallback to BOM without items
+        setSelectedBOM(bom);
+        setDetailOpen(true);
+        return;
+      }
+      const row = data as Record<string, unknown>;
+      const mapped = mapBOMFromDB(row);
+      const bomItems = (row.bom_items as Record<string, unknown>[]) ?? [];
+      mapped.items = bomItems.map(mapBOMItemFromDB);
+      setSelectedBOM(mapped);
+      setDetailOpen(true);
+    } catch {
+      toast.error("Failed to load BOM details");
+      setSelectedBOM(bom);
+      setDetailOpen(true);
+    }
   }
 
-  function handleClone(bom: BOM) {
-    const cloned: BOM = {
-      ...bom,
-      id: String(boms.length + 1),
-      name: `${bom.name} (Copy)`,
-      status: "draft",
-      version: bom.version + 1,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setBoms((prev) => [cloned, ...prev]);
-    setDetailOpen(false);
+  async function handleClone(bom: BOM) {
+    try {
+      const newName = `${bom.name} (Copy)`;
+      const { error } = await cloneBOM(bom.id, newName);
+      if (error) {
+        toast.error("Failed to clone BOM: " + error);
+        return;
+      }
+      toast.success("BOM cloned successfully");
+      setDetailOpen(false);
+      fetchBOMs();
+    } catch {
+      toast.error("Failed to clone BOM");
+    }
   }
 
   function handleFormChange(
@@ -814,44 +796,52 @@ export default function BOMPage() {
     }));
   }
 
-  function handleSave() {
-    if (!form.productName || !form.name) return;
+  async function handleSave() {
+    if (!form.productId || !form.name) {
+      toast.error("Product and BOM name are required");
+      return;
+    }
     setSaving(true);
-    setTimeout(() => {
-      const items: BOMItem[] = form.items
+    try {
+      const items = form.items
         .filter((i) => i.itemName)
-        .map((i, idx) => {
-          const qty = parseFloat(i.qty) || 0;
-          const rate = parseFloat(i.rate) || 0;
-          return {
-            id: `new-${idx}`,
-            name: i.itemName,
-            type: i.itemType as BOMItem["type"],
-            qtyPerPiece: qty,
-            uom: i.uom,
-            rate,
-            wastagePercent: 5,
-            amount: qty * rate * 1.05,
-          };
-        });
-      const totalCost = items.reduce((s, i) => s + i.amount, 0);
-      const newBOM: BOM = {
-        id: String(boms.length + 1),
-        name: form.name,
-        productName: form.productName,
-        styleCode: form.styleCode,
-        version: parseInt(form.version) || 1,
-        status: "draft",
-        totalCost,
-        createdAt: new Date().toISOString().split("T")[0],
+        .map((i) => ({
+          item_type: i.itemType,
+          item_id: crypto.randomUUID(),
+          item_name: i.itemName,
+          quantity_per_piece: parseFloat(i.qty) || 0,
+          uom: i.uom,
+          rate: parseFloat(i.rate) || 0,
+          wastage_percent: 5,
+        }));
+
+      const { error } = await createBOM({
+        bom: {
+          company_id: companyId,
+          product_id: form.productId,
+          name: form.name,
+          version: parseInt(form.version) || 1,
+          notes: form.notes || null,
+          status: "draft",
+          created_by: userId,
+        },
         items,
-        notes: form.notes,
-      };
-      setBoms((prev) => [newBOM, ...prev]);
-      setSaving(false);
+      });
+
+      if (error) {
+        toast.error("Failed to create BOM: " + error);
+        return;
+      }
+
+      toast.success("BOM created successfully");
       setCreateOpen(false);
       setForm(FORM_DEFAULTS);
-    }, 800);
+      fetchBOMs();
+    } catch {
+      toast.error("Failed to create BOM");
+    } finally {
+      setSaving(false);
+    }
   }
 
   // Stats
@@ -958,6 +948,7 @@ export default function BOMPage() {
           <DataTable
             columns={columns}
             data={boms}
+            loading={loading}
             searchKey="name"
             searchPlaceholder="Search BOM name..."
             filters={FILTERS}
@@ -992,6 +983,7 @@ export default function BOMPage() {
           onItemChange={handleItemChange}
           onAddItem={handleAddItem}
           onRemoveItem={handleRemoveItem}
+          products={products}
         />
       </FormSheet>
     </div>

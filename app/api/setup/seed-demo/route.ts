@@ -13,14 +13,17 @@ import {
   DEMO_NUMBER_SERIES,
 } from "@/lib/seed/demo-data";
 
-// Use service role key for admin operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+// Create admin client lazily to avoid build-time errors when env vars are missing
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
 
 export async function POST() {
+  const supabaseAdmin = getSupabaseAdmin();
   try {
     // 1. Create demo company
     const { error: companyError } = await supabaseAdmin
@@ -172,6 +175,8 @@ export async function POST() {
       .select();
 
     // 11. Create sample sales orders
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let insertedOrders: any[] | null = null;
     if (insertedBuyers && insertedProducts && userProfiles.length > 0) {
       const creatorId = userProfiles[0].id;
       const now = new Date();
@@ -279,10 +284,11 @@ export async function POST() {
         },
       ];
 
-      const { data: insertedOrders } = await supabaseAdmin
+      const { data: ordersData } = await supabaseAdmin
         .from("sales_orders")
         .upsert(orders, { onConflict: "company_id,order_number" })
         .select();
+      insertedOrders = ordersData;
 
       // 12. Create work orders for production orders
       if (insertedOrders && insertedLines) {

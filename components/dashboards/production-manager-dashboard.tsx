@@ -103,7 +103,7 @@ export function ProductionManagerDashboard({ companyId }: ProductionManagerDashb
             .eq("is_active", true),
           supabase
             .from("production_entries")
-            .select("*")
+            .select("*, work_orders:work_order_id(wo_number)")
             .eq("company_id", companyId)
             .eq("entry_date", today),
         ]);
@@ -125,7 +125,7 @@ export function ProductionManagerDashboard({ companyId }: ProductionManagerDashb
             : 0;
           return {
             line_name: line.name,
-            order: lineEntries[0]?.work_order_number ?? "--",
+            order: (lineEntries[0]?.work_orders as { wo_number?: string } | null)?.wo_number ?? "--",
             efficiency: eff,
             produced,
             target,

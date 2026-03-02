@@ -1152,6 +1152,9 @@ RETURNS TEXT AS $$
 $$ LANGUAGE SQL SECURITY DEFINER;
 
 -- Company-scoped policies (same pattern for all tables)
+CREATE POLICY "Authenticated users can create companies" ON companies
+  FOR INSERT TO authenticated WITH CHECK (true);
+
 CREATE POLICY "Users can view their company data" ON companies
   FOR SELECT USING (id = get_user_company_id());
 
@@ -1162,6 +1165,9 @@ CREATE POLICY "Admins can update company" ON companies
   );
 
 -- Profiles policies
+CREATE POLICY "Authenticated users can insert their own profile" ON profiles
+  FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
+
 CREATE POLICY "Users can view company profiles" ON profiles
   FOR SELECT USING (company_id = get_user_company_id() OR id = auth.uid());
 

@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { createColor, updateColor } from "@/lib/actions/masters"
 import type { Database } from "@/types/database"
 
 type Color = Database["public"]["Tables"]["colors"]["Row"]
@@ -25,11 +26,12 @@ type ColorFormValues = z.infer<typeof colorSchema>
 
 interface ColorFormProps {
   color?: Color | null
+  companyId: string
   onSuccess: (color: Color) => void
   onCancel?: () => void
 }
 
-export function ColorForm({ color, onSuccess, onCancel }: ColorFormProps) {
+export function ColorForm({ color, companyId, onSuccess, onCancel }: ColorFormProps) {
   const isEdit = !!color
 
   const {
@@ -63,22 +65,26 @@ export function ColorForm({ color, onSuccess, onCancel }: ColorFormProps) {
 
   async function onSubmit(values: ColorFormValues) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const result: Color = {
-        id: color?.id ?? crypto.randomUUID(),
-        company_id: color?.company_id ?? "",
-        created_at: color?.created_at ?? new Date().toISOString(),
+      const payload = {
         name: values.name,
         code: values.code,
         pantone_ref: values.pantone_ref || null,
         hex_code: values.hex_code || null,
       }
 
-      toast.success(isEdit ? "Color updated" : "Color created")
-      onSuccess(result)
-    } catch {
-      toast.error("Failed to save color. Please try again.")
+      if (isEdit && color) {
+        const { data: result, error } = await updateColor(color.id, payload)
+        if (error) throw new Error(error)
+        toast.success("Color updated")
+        onSuccess(result!)
+      } else {
+        const { data: result, error } = await createColor({ ...payload, company_id: companyId })
+        if (error) throw new Error(error)
+        toast.success("Color created")
+        onSuccess(result!)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save color. Please try again.")
     }
   }
 

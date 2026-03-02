@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import {
@@ -31,109 +30,36 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { createActionsColumn } from "@/components/data-table/columns";
 import { FormSheet } from "@/components/forms/form-sheet";
+import { useCompany } from "@/contexts/company-context";
+import { getInquiries, createInquiry } from "@/lib/actions/inquiries";
+import { getBuyers } from "@/lib/actions/buyers";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
-// Types and mock data
+// Types
 // ---------------------------------------------------------------------------
 
 type InquiryStatus = "new" | "costing_done" | "sample_sent" | "negotiation" | "won" | "lost";
 
 interface Inquiry {
   id: string;
-  inquiryNumber: string;
-  buyer: string;
+  inquiry_number: string;
+  buyer_name: string;
+  buyer_id: string;
   style: string;
-  quantity: number;
-  targetPrice: number;
+  expected_quantity: number;
+  target_price: number;
   currency: string;
   status: InquiryStatus;
-  date: string;
-  followUpDate?: string;
+  created_at: string;
+  expected_delivery_date?: string;
 }
 
-const MOCK_INQUIRIES: Inquiry[] = [
-  {
-    id: "1",
-    inquiryNumber: "INQ-2026-0045",
-    buyer: "H&M",
-    style: "Men's Polo Shirt",
-    quantity: 10000,
-    targetPrice: 7.5,
-    currency: "USD",
-    status: "negotiation",
-    date: "2026-02-10",
-    followUpDate: "2026-02-28",
-  },
-  {
-    id: "2",
-    inquiryNumber: "INQ-2026-0046",
-    buyer: "Zara",
-    style: "Women's Floral Dress",
-    quantity: 5000,
-    targetPrice: 18.0,
-    currency: "USD",
-    status: "sample_sent",
-    date: "2026-02-12",
-    followUpDate: "2026-03-01",
-  },
-  {
-    id: "3",
-    inquiryNumber: "INQ-2026-0044",
-    buyer: "Next",
-    style: "Kids Pyjama Set",
-    quantity: 20000,
-    targetPrice: 5.25,
-    currency: "USD",
-    status: "won",
-    date: "2026-01-28",
-  },
-  {
-    id: "4",
-    inquiryNumber: "INQ-2026-0043",
-    buyer: "ASOS",
-    style: "Graphic Tee",
-    quantity: 8000,
-    targetPrice: 6.0,
-    currency: "USD",
-    status: "costing_done",
-    date: "2026-02-18",
-    followUpDate: "2026-03-05",
-  },
-  {
-    id: "5",
-    inquiryNumber: "INQ-2026-0042",
-    buyer: "Primark",
-    style: "Leggings",
-    quantity: 30000,
-    targetPrice: 3.5,
-    currency: "USD",
-    status: "lost",
-    date: "2026-01-20",
-  },
-  {
-    id: "6",
-    inquiryNumber: "INQ-2026-0047",
-    buyer: "Marks & Spencer",
-    style: "Formal Blazer",
-    quantity: 2000,
-    targetPrice: 45.0,
-    currency: "USD",
-    status: "new",
-    date: "2026-02-24",
-    followUpDate: "2026-03-03",
-  },
-  {
-    id: "7",
-    inquiryNumber: "INQ-2026-0041",
-    buyer: "Lidl",
-    style: "Workwear Trousers",
-    quantity: 15000,
-    targetPrice: 9.0,
-    currency: "USD",
-    status: "won",
-    date: "2026-01-15",
-  },
-];
+interface Buyer {
+  id: string;
+  name: string;
+  code: string;
+}
 
 // ---------------------------------------------------------------------------
 // Status badge
@@ -196,12 +122,22 @@ function computeStats(inquiries: Inquiry[]) {
 
   const avgValue =
     inquiries.length > 0
-      ? inquiries.reduce((sum, i) => sum + i.quantity * i.targetPrice, 0) /
+      ? inquiries.reduce((sum, i) => sum + i.expected_quantity * i.target_price, 0) /
         inquiries.length
       : 0;
 
-  // Rough avg days to convert (mock)
-  const avgDays = 18;
+  // Average days from creation to now for won inquiries
+  const wonInquiries = inquiries.filter((i) => i.status === "won");
+  const avgDays =
+    wonInquiries.length > 0
+      ? Math.round(
+          wonInquiries.reduce((sum, i) => {
+            const created = new Date(i.created_at);
+            const now = new Date();
+            return sum + Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+          }, 0) / wonInquiries.length
+        )
+      : 0;
 
   return { total, conversionRate, avgValue, avgDays };
 }
@@ -213,20 +149,20 @@ function computeStats(inquiries: Inquiry[]) {
 function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Inquiry>[] {
   return [
     {
-      accessorKey: "inquiryNumber",
+      accessorKey: "inquiry_number",
       header: "Inquiry #",
       cell: ({ row }) => (
         <span className="font-mono text-sm font-semibold text-blue-600">
-          {row.original.inquiryNumber}
+          {row.original.inquiry_number}
         </span>
       ),
     },
     {
-      accessorKey: "buyer",
+      accessorKey: "buyer_name",
       header: "Buyer",
       cell: ({ row }) => (
         <span className="text-sm font-medium text-gray-900">
-          {row.original.buyer}
+          {row.original.buyer_name}
         </span>
       ),
     },
@@ -240,20 +176,20 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Inquiry>[
       ),
     },
     {
-      accessorKey: "quantity",
+      accessorKey: "expected_quantity",
       header: "Quantity",
       cell: ({ row }) => (
         <span className="tabular-nums text-sm">
-          {row.original.quantity.toLocaleString()}
+          {row.original.expected_quantity.toLocaleString()}
         </span>
       ),
     },
     {
-      accessorKey: "targetPrice",
+      accessorKey: "target_price",
       header: "Target Price",
       cell: ({ row }) => (
         <span className="tabular-nums text-sm font-medium">
-          {row.original.currency} {row.original.targetPrice.toFixed(2)}
+          {row.original.currency} {Number(row.original.target_price).toFixed(2)}
         </span>
       ),
     },
@@ -265,24 +201,24 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Inquiry>[
         row.original.status === filterValue,
     },
     {
-      accessorKey: "date",
+      accessorKey: "created_at",
       header: "Date",
       cell: ({ row }) => (
         <span className="text-sm text-gray-600 whitespace-nowrap">
-          {formatDate(row.original.date)}
+          {formatDate(row.original.created_at)}
         </span>
       ),
     },
     {
-      accessorKey: "followUpDate",
-      header: "Follow Up",
+      accessorKey: "expected_delivery_date",
+      header: "Delivery Date",
       cell: ({ row }) =>
-        row.original.followUpDate ? (
+        row.original.expected_delivery_date ? (
           <span className="text-sm text-gray-600 whitespace-nowrap">
-            {formatDate(row.original.followUpDate)}
+            {formatDate(row.original.expected_delivery_date)}
           </span>
         ) : (
-          <span className="text-gray-400">—</span>
+          <span className="text-gray-400">--</span>
         ),
     },
     createActionsColumn<Inquiry>([
@@ -304,18 +240,75 @@ function buildColumns(router: ReturnType<typeof useRouter>): ColumnDef<Inquiry>[
 // Page
 // ---------------------------------------------------------------------------
 
-const BUYERS_LIST = ["H&M", "Zara", "Marks & Spencer", "Primark", "Next", "Lidl", "ASOS", "Tesco"];
-
 export default function InquiriesPage() {
   const router = useRouter();
-  const stats = computeStats(MOCK_INQUIRIES);
+  const { companyId, userId } = useCompany();
+  const [inquiries, setInquiries] = React.useState<Inquiry[]>([]);
+  const [buyers, setBuyers] = React.useState<Buyer[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
   const columns = React.useMemo(() => buildColumns(router), [router]);
+
+  // Fetch inquiries from Supabase
+  const fetchInquiries = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await getInquiries(companyId);
+      if (error) {
+        toast.error("Failed to load inquiries");
+        return;
+      }
+      const mapped: Inquiry[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        inquiry_number: row.inquiry_number as string,
+        buyer_name: (row.buyers as Record<string, unknown>)?.name as string ?? "Unknown",
+        buyer_id: row.buyer_id as string,
+        style: (row.product_name as string) ?? (row.products as Record<string, unknown>)?.name as string ?? "--",
+        expected_quantity: (row.expected_quantity as number) ?? 0,
+        target_price: (row.target_price as number) ?? 0,
+        currency: (row.currency as string) ?? "USD",
+        status: row.status as InquiryStatus,
+        created_at: row.created_at as string,
+        expected_delivery_date: row.expected_delivery_date as string | undefined,
+      }));
+      setInquiries(mapped);
+    } catch {
+      toast.error("Failed to load inquiries");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  // Fetch buyers for the form dropdown
+  const fetchBuyers = React.useCallback(async () => {
+    try {
+      const { data, error } = await getBuyers(companyId);
+      if (!error && data) {
+        setBuyers(
+          (data as Record<string, unknown>[]).map((b) => ({
+            id: b.id as string,
+            name: b.name as string,
+            code: b.code as string,
+          }))
+        );
+      }
+    } catch {
+      // Silently fail for buyers dropdown
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchInquiries();
+    fetchBuyers();
+  }, [fetchInquiries, fetchBuyers]);
+
+  const stats = computeStats(inquiries);
 
   // FormSheet state
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [formData, setFormData] = React.useState({
-    buyer: "",
+    buyer_id: "",
     product: "",
     expected_quantity: "",
     target_price: "",
@@ -329,20 +322,52 @@ export default function InquiriesPage() {
   }
 
   async function handleSaveInquiry() {
+    if (!formData.buyer_id) {
+      toast.error("Please select a buyer");
+      return;
+    }
+    if (!formData.product) {
+      toast.error("Please enter a product/style name");
+      return;
+    }
+
     setSaving(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 800));
-    setSaving(false);
-    setSheetOpen(false);
-    setFormData({
-      buyer: "",
-      product: "",
-      expected_quantity: "",
-      target_price: "",
-      currency: "USD",
-      expected_delivery_date: "",
-      notes: "",
-    });
+    try {
+      const { error } = await createInquiry({
+        company_id: companyId,
+        buyer_id: formData.buyer_id,
+        product_name: formData.product,
+        expected_quantity: formData.expected_quantity ? parseInt(formData.expected_quantity, 10) : 0,
+        target_price: formData.target_price ? parseFloat(formData.target_price) : undefined,
+        currency: formData.currency,
+        expected_delivery_date: formData.expected_delivery_date || undefined,
+        notes: formData.notes || undefined,
+        status: "new",
+        created_by: userId,
+      });
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      toast.success("Inquiry created successfully");
+      setSheetOpen(false);
+      setFormData({
+        buyer_id: "",
+        product: "",
+        expected_quantity: "",
+        target_price: "",
+        currency: "USD",
+        expected_delivery_date: "",
+        notes: "",
+      });
+      fetchInquiries();
+    } catch {
+      toast.error("Failed to create inquiry");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const STAT_CARDS = [
@@ -376,13 +401,17 @@ export default function InquiriesPage() {
     },
   ];
 
+  // Build buyer filter options from actual data
+  const buyerOptions = React.useMemo(() => {
+    const unique = [...new Set(inquiries.map((i) => i.buyer_name))].sort();
+    return unique.map((b) => ({ label: b, value: b }));
+  }, [inquiries]);
+
   const FILTERS = [
     {
-      key: "buyer",
+      key: "buyer_name",
       label: "Buyer",
-      options: [
-        "H&M", "Zara", "Marks & Spencer", "Primark", "Next", "Lidl", "ASOS", "Tesco",
-      ].map((b) => ({ label: b, value: b })),
+      options: buyerOptions,
     },
     {
       key: "status",
@@ -398,7 +427,7 @@ export default function InquiriesPage() {
   const statusCounts = Object.keys(INQUIRY_STATUS_CONFIG).map((status) => ({
     status: status as InquiryStatus,
     label: INQUIRY_STATUS_CONFIG[status as InquiryStatus].label,
-    count: MOCK_INQUIRIES.filter((i) => i.status === status).length,
+    count: inquiries.filter((i) => i.status === status).length,
     className: INQUIRY_STATUS_CONFIG[status as InquiryStatus].className,
   }));
 
@@ -480,8 +509,9 @@ export default function InquiriesPage() {
         <CardContent className="p-4">
           <DataTable
             columns={columns}
-            data={MOCK_INQUIRIES}
-            searchKey="inquiryNumber"
+            data={inquiries}
+            loading={loading}
+            searchKey="inquiry_number"
             searchPlaceholder="Search by inquiry number..."
             filters={FILTERS}
             onRowClick={(row) => {}}
@@ -510,16 +540,16 @@ export default function InquiriesPage() {
           <div className="space-y-1.5">
             <Label htmlFor="inq-buyer">Buyer *</Label>
             <Select
-              value={formData.buyer}
-              onValueChange={(v) => handleFormChange("buyer", v)}
+              value={formData.buyer_id}
+              onValueChange={(v) => handleFormChange("buyer_id", v)}
             >
               <SelectTrigger id="inq-buyer">
                 <SelectValue placeholder="Select buyer..." />
               </SelectTrigger>
               <SelectContent>
-                {BUYERS_LIST.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
+                {buyers.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
                   </SelectItem>
                 ))}
               </SelectContent>

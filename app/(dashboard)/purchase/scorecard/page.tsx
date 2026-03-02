@@ -19,305 +19,45 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  Legend,
   RadarChart,
   Radar,
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  Legend,
 } from "recharts";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCompany } from "@/contexts/company-context";
+import { getSupplierScorecard } from "@/lib/actions/suppliers";
 
 // ---------------------------------------------------------------------------
-// Mock Data - Indian textile suppliers
+// Types
 // ---------------------------------------------------------------------------
 
 interface SupplierScore {
   id: string;
   name: string;
   code: string;
-  category: "Fabric" | "Yarn" | "Trims" | "Chemicals" | "Accessories";
-  deliveryAdherence: number; // % on-time
-  qualityPassRate: number; // % accepted in GRN
-  priceCompetitiveness: number; // 1-5
-  responsiveness: number; // 1-5
-  documentAccuracy: number; // 1-5
-  overallScore: number; // 0-100
+  category: string;
+  deliveryAdherence: number;
+  qualityPassRate: number;
+  priceCompetitiveness: number;
+  responsiveness: number;
+  documentAccuracy: number;
+  overallScore: number;
   trend: "up" | "down" | "stable";
   tier: "gold" | "silver" | "bronze" | "probation";
   ordersThisQuarter: number;
   avgLeadTimeDays: number;
-  totalPurchaseValue: number; // INR
+  totalPurchaseValue: number;
   lastSupplyDate: string;
-  rejectionLastQuarter: number; // %
+  rejectionLastQuarter: number;
 }
-
-const MOCK_SUPPLIERS: SupplierScore[] = [
-  {
-    id: "1",
-    name: "Vardhman Textiles",
-    code: "SUP-VTL",
-    category: "Fabric",
-    deliveryAdherence: 94,
-    qualityPassRate: 97,
-    priceCompetitiveness: 5,
-    responsiveness: 5,
-    documentAccuracy: 5,
-    overallScore: 92,
-    trend: "up",
-    tier: "gold",
-    ordersThisQuarter: 18,
-    avgLeadTimeDays: 12,
-    totalPurchaseValue: 48500000,
-    lastSupplyDate: "2026-02-22",
-    rejectionLastQuarter: 1.2,
-  },
-  {
-    id: "2",
-    name: "Alok Industries",
-    code: "SUP-ALK",
-    category: "Fabric",
-    deliveryAdherence: 82,
-    qualityPassRate: 91,
-    priceCompetitiveness: 4,
-    responsiveness: 3,
-    documentAccuracy: 4,
-    overallScore: 78,
-    trend: "stable",
-    tier: "silver",
-    ordersThisQuarter: 12,
-    avgLeadTimeDays: 16,
-    totalPurchaseValue: 31200000,
-    lastSupplyDate: "2026-02-18",
-    rejectionLastQuarter: 3.8,
-  },
-  {
-    id: "3",
-    name: "SRF Limited",
-    code: "SUP-SRF",
-    category: "Chemicals",
-    deliveryAdherence: 88,
-    qualityPassRate: 96,
-    priceCompetitiveness: 3,
-    responsiveness: 4,
-    documentAccuracy: 5,
-    overallScore: 85,
-    trend: "up",
-    tier: "gold",
-    ordersThisQuarter: 9,
-    avgLeadTimeDays: 8,
-    totalPurchaseValue: 12800000,
-    lastSupplyDate: "2026-02-24",
-    rejectionLastQuarter: 0.8,
-  },
-  {
-    id: "4",
-    name: "YKK India",
-    code: "SUP-YKK",
-    category: "Trims",
-    deliveryAdherence: 96,
-    qualityPassRate: 99,
-    priceCompetitiveness: 3,
-    responsiveness: 5,
-    documentAccuracy: 5,
-    overallScore: 91,
-    trend: "stable",
-    tier: "gold",
-    ordersThisQuarter: 24,
-    avgLeadTimeDays: 7,
-    totalPurchaseValue: 8900000,
-    lastSupplyDate: "2026-02-25",
-    rejectionLastQuarter: 0.3,
-  },
-  {
-    id: "5",
-    name: "Archroma India",
-    code: "SUP-ARC",
-    category: "Chemicals",
-    deliveryAdherence: 78,
-    qualityPassRate: 88,
-    priceCompetitiveness: 2,
-    responsiveness: 3,
-    documentAccuracy: 3,
-    overallScore: 68,
-    trend: "down",
-    tier: "bronze",
-    ordersThisQuarter: 7,
-    avgLeadTimeDays: 14,
-    totalPurchaseValue: 9600000,
-    lastSupplyDate: "2026-02-10",
-    rejectionLastQuarter: 5.6,
-  },
-  {
-    id: "6",
-    name: "Grasim Industries",
-    code: "SUP-GRS",
-    category: "Yarn",
-    deliveryAdherence: 86,
-    qualityPassRate: 94,
-    priceCompetitiveness: 4,
-    responsiveness: 4,
-    documentAccuracy: 4,
-    overallScore: 83,
-    trend: "up",
-    tier: "silver",
-    ordersThisQuarter: 15,
-    avgLeadTimeDays: 11,
-    totalPurchaseValue: 26400000,
-    lastSupplyDate: "2026-02-21",
-    rejectionLastQuarter: 2.4,
-  },
-  {
-    id: "7",
-    name: "Coats India",
-    code: "SUP-COT",
-    category: "Accessories",
-    deliveryAdherence: 56,
-    qualityPassRate: 82,
-    priceCompetitiveness: 2,
-    responsiveness: 2,
-    documentAccuracy: 2,
-    overallScore: 51,
-    trend: "down",
-    tier: "probation",
-    ordersThisQuarter: 4,
-    avgLeadTimeDays: 21,
-    totalPurchaseValue: 4100000,
-    lastSupplyDate: "2026-01-30",
-    rejectionLastQuarter: 8.2,
-  },
-  {
-    id: "8",
-    name: "Huntsman India",
-    code: "SUP-HNT",
-    category: "Chemicals",
-    deliveryAdherence: 72,
-    qualityPassRate: 86,
-    priceCompetitiveness: 2,
-    responsiveness: 3,
-    documentAccuracy: 3,
-    overallScore: 62,
-    trend: "stable",
-    tier: "bronze",
-    ordersThisQuarter: 6,
-    avgLeadTimeDays: 18,
-    totalPurchaseValue: 7200000,
-    lastSupplyDate: "2026-02-14",
-    rejectionLastQuarter: 6.1,
-  },
-];
-
-// Monthly rejection trends (last 6 months)
-const REJECTION_TRENDS = [
-  {
-    month: "Sep",
-    Vardhman: 1.8,
-    Alok: 4.2,
-    SRF: 0.6,
-    YKK: 0.1,
-    Archroma: 7.1,
-    Grasim: 3.0,
-  },
-  {
-    month: "Oct",
-    Vardhman: 1.5,
-    Alok: 3.9,
-    SRF: 0.9,
-    YKK: 0.2,
-    Archroma: 6.8,
-    Grasim: 2.7,
-  },
-  {
-    month: "Nov",
-    Vardhman: 1.2,
-    Alok: 4.1,
-    SRF: 0.7,
-    YKK: 0.4,
-    Archroma: 5.9,
-    Grasim: 2.5,
-  },
-  {
-    month: "Dec",
-    Vardhman: 1.6,
-    Alok: 3.8,
-    SRF: 1.0,
-    YKK: 0.3,
-    Archroma: 6.2,
-    Grasim: 2.8,
-  },
-  {
-    month: "Jan",
-    Vardhman: 1.3,
-    Alok: 4.0,
-    SRF: 0.8,
-    YKK: 0.2,
-    Archroma: 5.8,
-    Grasim: 2.6,
-  },
-  {
-    month: "Feb",
-    Vardhman: 1.2,
-    Alok: 3.8,
-    SRF: 0.8,
-    YKK: 0.3,
-    Archroma: 5.6,
-    Grasim: 2.4,
-  },
-];
-
-// Delivery adherence bar data
-const DELIVERY_BAR = MOCK_SUPPLIERS.map((s) => ({
-  name: s.name.split(" ")[0],
-  fullName: s.name,
-  adherence: s.deliveryAdherence,
-  target: 90,
-}));
-
-// Top 3 suppliers radar data
-const TOP_SUPPLIERS = MOCK_SUPPLIERS.slice()
-  .sort((a, b) => b.overallScore - a.overallScore)
-  .slice(0, 3);
-
-const RADAR_DATA = [
-  {
-    dimension: "Delivery",
-    [TOP_SUPPLIERS[0].name.split(" ")[0]]: TOP_SUPPLIERS[0].deliveryAdherence,
-    [TOP_SUPPLIERS[1].name.split(" ")[0]]: TOP_SUPPLIERS[1].deliveryAdherence,
-    [TOP_SUPPLIERS[2].name.split(" ")[0]]: TOP_SUPPLIERS[2].deliveryAdherence,
-  },
-  {
-    dimension: "Quality",
-    [TOP_SUPPLIERS[0].name.split(" ")[0]]: TOP_SUPPLIERS[0].qualityPassRate,
-    [TOP_SUPPLIERS[1].name.split(" ")[0]]: TOP_SUPPLIERS[1].qualityPassRate,
-    [TOP_SUPPLIERS[2].name.split(" ")[0]]: TOP_SUPPLIERS[2].qualityPassRate,
-  },
-  {
-    dimension: "Price",
-    [TOP_SUPPLIERS[0].name.split(" ")[0]]: TOP_SUPPLIERS[0].priceCompetitiveness * 20,
-    [TOP_SUPPLIERS[1].name.split(" ")[0]]: TOP_SUPPLIERS[1].priceCompetitiveness * 20,
-    [TOP_SUPPLIERS[2].name.split(" ")[0]]: TOP_SUPPLIERS[2].priceCompetitiveness * 20,
-  },
-  {
-    dimension: "Response",
-    [TOP_SUPPLIERS[0].name.split(" ")[0]]: TOP_SUPPLIERS[0].responsiveness * 20,
-    [TOP_SUPPLIERS[1].name.split(" ")[0]]: TOP_SUPPLIERS[1].responsiveness * 20,
-    [TOP_SUPPLIERS[2].name.split(" ")[0]]: TOP_SUPPLIERS[2].responsiveness * 20,
-  },
-  {
-    dimension: "Docs",
-    [TOP_SUPPLIERS[0].name.split(" ")[0]]: TOP_SUPPLIERS[0].documentAccuracy * 20,
-    [TOP_SUPPLIERS[1].name.split(" ")[0]]: TOP_SUPPLIERS[1].documentAccuracy * 20,
-    [TOP_SUPPLIERS[2].name.split(" ")[0]]: TOP_SUPPLIERS[2].documentAccuracy * 20,
-  },
-];
-
-const RADAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -410,14 +150,7 @@ function ScoreCircle({ score }: { score: number }) {
 }
 
 const PERIODS = ["This Month", "This Quarter", "Last Quarter", "YTD"];
-const REJECTION_COLORS = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#6366f1",
-];
+const RADAR_COLORS = ["#3b82f6", "#10b981", "#f59e0b"];
 
 // ---------------------------------------------------------------------------
 // Custom Tooltip
@@ -429,10 +162,9 @@ function DeliveryTooltip({ active, payload, label }: {
   label?: string;
 }) {
   if (!active || !payload) return null;
-  const sup = DELIVERY_BAR.find((d) => d.name === label);
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm text-xs">
-      <p className="font-semibold text-gray-700 mb-1">{sup?.fullName ?? label}</p>
+      <p className="font-semibold text-gray-700 mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }}>
           {p.name}: {p.value}%
@@ -447,17 +179,42 @@ function DeliveryTooltip({ active, payload, label }: {
 // ---------------------------------------------------------------------------
 
 export default function SupplierScorecardPage() {
+  const { companyId } = useCompany();
   const [activePeriod, setActivePeriod] = React.useState("This Quarter");
   const [filterCategory, setFilterCategory] = React.useState("All");
   const [sortByScore, setSortByScore] = React.useState(true);
+  const [loading, setLoading] = React.useState(true);
+  const [suppliers, setSuppliers] = React.useState<SupplierScore[]>([]);
 
-  const categories = [
-    "All",
-    ...Array.from(new Set(MOCK_SUPPLIERS.map((s) => s.category))).sort(),
-  ];
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getSupplierScorecard(companyId);
+      if (result.error) {
+        toast.error("Failed to load scorecard: " + result.error);
+      } else {
+        setSuppliers((result.data ?? []) as SupplierScore[]);
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const categories = React.useMemo(() => {
+    return [
+      "All",
+      ...Array.from(new Set(suppliers.map((s) => s.category))).sort(),
+    ];
+  }, [suppliers]);
 
   const filtered = React.useMemo(() => {
-    let data = [...MOCK_SUPPLIERS];
+    let data = [...suppliers];
     if (filterCategory !== "All") {
       data = data.filter((s) => s.category === filterCategory);
     }
@@ -467,14 +224,107 @@ export default function SupplierScorecardPage() {
       data.sort((a, b) => a.name.localeCompare(b.name));
     }
     return data;
-  }, [filterCategory, sortByScore]);
+  }, [suppliers, filterCategory, sortByScore]);
 
-  const topPerformer = [...MOCK_SUPPLIERS].sort((a, b) => b.overallScore - a.overallScore)[0];
-  const avgDelivery = Math.round(
-    MOCK_SUPPLIERS.reduce((s, sup) => s + sup.deliveryAdherence, 0) / MOCK_SUPPLIERS.length
+  const topPerformer = React.useMemo(
+    () => [...suppliers].sort((a, b) => b.overallScore - a.overallScore)[0],
+    [suppliers]
   );
-  const atRisk = MOCK_SUPPLIERS.filter((s) => s.overallScore < 60).length;
-  const evaluated = MOCK_SUPPLIERS.length;
+  const avgDelivery = React.useMemo(
+    () =>
+      suppliers.length > 0
+        ? Math.round(
+            suppliers.reduce((s, sup) => s + sup.deliveryAdherence, 0) / suppliers.length
+          )
+        : 0,
+    [suppliers]
+  );
+  const atRisk = React.useMemo(
+    () => suppliers.filter((s) => s.overallScore < 60).length,
+    [suppliers]
+  );
+  const evaluated = suppliers.length;
+
+  // Delivery bar data
+  const deliveryBar = React.useMemo(
+    () =>
+      suppliers.map((s) => ({
+        name: s.name.length > 12 ? s.name.slice(0, 12) + "..." : s.name,
+        fullName: s.name,
+        adherence: s.deliveryAdherence,
+        target: 90,
+      })),
+    [suppliers]
+  );
+
+  // Top 3 for radar
+  const top3 = React.useMemo(
+    () =>
+      [...suppliers]
+        .sort((a, b) => b.overallScore - a.overallScore)
+        .slice(0, 3),
+    [suppliers]
+  );
+
+  const radarData = React.useMemo(() => {
+    if (top3.length === 0) return [];
+    const dimensions = [
+      { key: "deliveryAdherence", label: "Delivery" },
+      { key: "qualityPassRate", label: "Quality" },
+      { key: "priceCompetitiveness", label: "Price", scale: 20 },
+      { key: "responsiveness", label: "Response", scale: 20 },
+      { key: "documentAccuracy", label: "Docs", scale: 20 },
+    ];
+    return dimensions.map((dim) => {
+      const row: Record<string, string | number> = { dimension: dim.label };
+      top3.forEach((sup) => {
+        const shortName = sup.name.split(" ")[0];
+        const val = sup[dim.key as keyof SupplierScore] as number;
+        row[shortName] = dim.scale ? val * dim.scale : val;
+      });
+      return row;
+    });
+  }, [top3]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Supplier Scorecard"
+          description="Performance evaluation for vendor selection, negotiation, and risk management"
+          breadcrumb={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Purchase", href: "/purchase" },
+            { label: "Supplier Scorecard" },
+          ]}
+        />
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (suppliers.length === 0) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Supplier Scorecard"
+          description="Performance evaluation for vendor selection, negotiation, and risk management"
+          breadcrumb={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: "Purchase", href: "/purchase" },
+            { label: "Supplier Scorecard" },
+          ]}
+        />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <BarChart3 className="mb-3 h-10 w-10 text-gray-300" />
+          <p className="text-sm font-medium text-gray-500">No suppliers found</p>
+          <p className="text-xs text-gray-400">Add suppliers to see their performance scorecard</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -525,8 +375,8 @@ export default function SupplierScorecardPage() {
           },
           {
             title: "Top Performer",
-            value: topPerformer.name.split(" ")[0],
-            sub: `Score: ${topPerformer.overallScore}/100`,
+            value: topPerformer?.name.split(" ")[0] ?? "—",
+            sub: topPerformer ? `Score: ${topPerformer.overallScore}/100` : "—",
             icon: Award,
             color: "text-yellow-600",
             bg: "bg-yellow-50",
@@ -580,67 +430,75 @@ export default function SupplierScorecardPage() {
             <CardTitle className="text-base">Top 3 Suppliers - Radar Comparison</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <RadarChart data={RADAR_DATA}>
-                <PolarGrid stroke="#e5e7eb" />
-                <PolarAngleAxis
-                  dataKey="dimension"
-                  tick={{ fontSize: 11, fill: "#6b7280" }}
-                />
-                <PolarRadiusAxis
-                  angle={30}
-                  domain={[0, 100]}
-                  tick={{ fontSize: 9, fill: "#9ca3af" }}
-                  tickCount={4}
-                />
-                {TOP_SUPPLIERS.map((sup, idx) => (
-                  <Radar
-                    key={sup.id}
-                    name={sup.name.split(" ")[0]}
-                    dataKey={sup.name.split(" ")[0]}
-                    stroke={RADAR_COLORS[idx]}
-                    fill={RADAR_COLORS[idx]}
-                    fillOpacity={0.12}
-                    strokeWidth={2}
-                  />
-                ))}
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 11,
-                    borderRadius: 8,
-                    border: "1px solid #e5e7eb",
-                  }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: 11 }}
-                  formatter={(value) =>
-                    TOP_SUPPLIERS.find(
-                      (s) => s.name.split(" ")[0] === value
-                    )?.name ?? value
-                  }
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {TOP_SUPPLIERS.map((sup, idx) => (
-                <div
-                  key={sup.id}
-                  className="rounded-lg p-2 text-center"
-                  style={{ backgroundColor: `${RADAR_COLORS[idx]}10`, border: `1px solid ${RADAR_COLORS[idx]}30` }}
-                >
-                  <p className="text-xs font-semibold text-gray-700 truncate">
-                    {sup.name.split(" ")[0]}
-                  </p>
-                  <p
-                    className="text-base font-black tabular-nums"
-                    style={{ color: RADAR_COLORS[idx] }}
-                  >
-                    {sup.overallScore}
-                  </p>
-                  <p className="text-[10px] text-gray-400">score</p>
+            {top3.length >= 3 && radarData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={280}>
+                  <RadarChart data={radarData}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis
+                      dataKey="dimension"
+                      tick={{ fontSize: 11, fill: "#6b7280" }}
+                    />
+                    <PolarRadiusAxis
+                      angle={30}
+                      domain={[0, 100]}
+                      tick={{ fontSize: 9, fill: "#9ca3af" }}
+                      tickCount={4}
+                    />
+                    {top3.map((sup, idx) => (
+                      <Radar
+                        key={sup.id}
+                        name={sup.name.split(" ")[0]}
+                        dataKey={sup.name.split(" ")[0]}
+                        stroke={RADAR_COLORS[idx]}
+                        fill={RADAR_COLORS[idx]}
+                        fillOpacity={0.12}
+                        strokeWidth={2}
+                      />
+                    ))}
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: 11,
+                        borderRadius: 8,
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11 }}
+                      formatter={(value) =>
+                        top3.find(
+                          (s) => s.name.split(" ")[0] === value
+                        )?.name ?? value
+                      }
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {top3.map((sup, idx) => (
+                    <div
+                      key={sup.id}
+                      className="rounded-lg p-2 text-center"
+                      style={{ backgroundColor: `${RADAR_COLORS[idx]}10`, border: `1px solid ${RADAR_COLORS[idx]}30` }}
+                    >
+                      <p className="text-xs font-semibold text-gray-700 truncate">
+                        {sup.name.split(" ")[0]}
+                      </p>
+                      <p
+                        className="text-base font-black tabular-nums"
+                        style={{ color: RADAR_COLORS[idx] }}
+                      >
+                        {sup.overallScore}
+                      </p>
+                      <p className="text-[10px] text-gray-400">score</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400 py-10 text-center">
+                Need at least 3 suppliers for radar chart
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -650,66 +508,70 @@ export default function SupplierScorecardPage() {
             <CardTitle className="text-base">Delivery Adherence by Supplier</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart
-                data={DELIVERY_BAR}
-                layout="vertical"
-                margin={{ left: 8, right: 30, top: 4, bottom: 4 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="#f0f0f0"
-                  horizontal={false}
-                />
-                <XAxis
-                  type="number"
-                  domain={[0, 100]}
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(v) => `${v}%`}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  width={72}
-                  tickLine={false}
-                />
-                <Tooltip content={<DeliveryTooltip />} />
-                <Bar
-                  dataKey="target"
-                  fill="#e5e7eb"
-                  barSize={12}
-                  name="Target (90%)"
-                  radius={[0, 4, 4, 0]}
-                />
-                <Bar
-                  dataKey="adherence"
-                  barSize={12}
-                  name="Actual"
-                  radius={[0, 4, 4, 0]}
-                  label={{
-                    position: "right",
-                    fontSize: 10,
-                    formatter: (v: number) => `${v}%`,
-                    fill: "#6b7280",
-                  }}
+            {deliveryBar.length > 0 ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={deliveryBar}
+                  layout="vertical"
+                  margin={{ left: 8, right: 30, top: 4, bottom: 4 }}
                 >
-                  {DELIVERY_BAR.map((entry, index) => (
-                    <rect
-                      key={`bar-${index}`}
-                      fill={
-                        entry.adherence >= 90
-                          ? "#22c55e"
-                          : entry.adherence >= 75
-                          ? "#f59e0b"
-                          : "#ef4444"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#f0f0f0"
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tick={{ fontSize: 10 }}
+                    tickFormatter={(v) => `${v}%`}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 11 }}
+                    width={100}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<DeliveryTooltip />} />
+                  <Bar
+                    dataKey="target"
+                    fill="#e5e7eb"
+                    barSize={12}
+                    name="Target (90%)"
+                    radius={[0, 4, 4, 0]}
+                  />
+                  <Bar
+                    dataKey="adherence"
+                    barSize={12}
+                    name="Actual"
+                    radius={[0, 4, 4, 0]}
+                    label={{
+                      position: "right",
+                      fontSize: 10,
+                      formatter: (v) => `${v}%`,
+                      fill: "#6b7280",
+                    }}
+                  >
+                    {deliveryBar.map((entry, index) => (
+                      <rect
+                        key={`bar-${index}`}
+                        fill={
+                          entry.adherence >= 90
+                            ? "#22c55e"
+                            : entry.adherence >= 75
+                            ? "#f59e0b"
+                            : "#ef4444"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-gray-400 py-10 text-center">No delivery data available</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -904,82 +766,31 @@ export default function SupplierScorecardPage() {
         </CardContent>
       </Card>
 
-      {/* Rejection Trend Chart */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            Rejection Trend - Last 6 Months (% of received quantity)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={REJECTION_TRENDS}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                tickFormatter={(v) => `${v}%`}
-                tickLine={false}
-                domain={[0, 10]}
-              />
-              <Tooltip
-                formatter={(value: number) => [`${value.toFixed(1)}%`, "Rejection Rate"]}
-                contentStyle={{
-                  fontSize: 12,
-                  borderRadius: 8,
-                  border: "1px solid #e5e7eb",
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {["Vardhman", "Alok", "SRF", "YKK", "Archroma", "Grasim"].map(
-                (name, idx) => (
-                  <Line
-                    key={name}
-                    type="monotone"
-                    dataKey={name}
-                    stroke={REJECTION_COLORS[idx]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                  />
-                )
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5">
-            <p className="text-xs font-medium text-amber-800">
-              Archroma India shows consistently high rejection rates (5-7%). Recommend audit
-              visit and quality improvement plan before next contract renewal.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Tier Legend + Action Summary */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
             {
               tier: "gold" as const,
-              count: MOCK_SUPPLIERS.filter((s) => s.tier === "gold").length,
+              count: suppliers.filter((s) => s.tier === "gold").length,
               desc: "Score >= 85. Preferred supplier. Priority allocation.",
               action: "Increase share of business",
             },
             {
               tier: "silver" as const,
-              count: MOCK_SUPPLIERS.filter((s) => s.tier === "silver").length,
+              count: suppliers.filter((s) => s.tier === "silver").length,
               desc: "Score 70-84. Reliable supplier with improvement areas.",
               action: "Development plan in place",
             },
             {
               tier: "bronze" as const,
-              count: MOCK_SUPPLIERS.filter((s) => s.tier === "bronze").length,
+              count: suppliers.filter((s) => s.tier === "bronze").length,
               desc: "Score 55-69. Needs monitoring and targeted improvement.",
               action: "Corrective action required",
             },
             {
               tier: "probation" as const,
-              count: MOCK_SUPPLIERS.filter((s) => s.tier === "probation").length,
+              count: suppliers.filter((s) => s.tier === "probation").length,
               desc: "Score < 55. At risk of delisting. Urgent intervention needed.",
               action: "Escalate to management",
             },

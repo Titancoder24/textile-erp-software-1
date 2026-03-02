@@ -19,15 +19,22 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { FormSheet } from "@/components/forms/form-sheet";
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/contexts/company-context";
+import {
+  getCuttingEntries,
+  createCuttingEntry,
+  getWorkOrdersForDropdown,
+} from "@/lib/actions/production";
 
 // ---------------------------------------------------------------------------
-// Types & Data
+// Types
 // ---------------------------------------------------------------------------
 
 type CuttingEntry = {
   id: string;
   date: string;
   workOrder: string;
+  workOrderId: string;
   cutQty: number;
   fabricConsumed: number;
   plannedConsumption: number;
@@ -36,26 +43,12 @@ type CuttingEntry = {
   enteredBy: string;
 };
 
-const DEMO_ENTRIES: CuttingEntry[] = [
-  { id: "1", date: "2026-02-26", workOrder: "WO-2026-0051", cutQty: 450, fabricConsumed: 620, plannedConsumption: 600, wastagePercent: 3.3, bundles: 18, enteredBy: "Anand S." },
-  { id: "2", date: "2026-02-26", workOrder: "WO-2026-0053", cutQty: 800, fabricConsumed: 920, plannedConsumption: 900, wastagePercent: 2.2, bundles: 32, enteredBy: "Ravi K." },
-  { id: "3", date: "2026-02-25", workOrder: "WO-2026-0054", cutQty: 300, fabricConsumed: 480, plannedConsumption: 450, wastagePercent: 6.7, bundles: 12, enteredBy: "Anand S." },
-  { id: "4", date: "2026-02-25", workOrder: "WO-2026-0052", cutQty: 500, fabricConsumed: 550, plannedConsumption: 540, wastagePercent: 1.9, bundles: 20, enteredBy: "Meena P." },
-  { id: "5", date: "2026-02-24", workOrder: "WO-2026-0057", cutQty: 600, fabricConsumed: 700, plannedConsumption: 690, wastagePercent: 1.4, bundles: 24, enteredBy: "Ravi K." },
-  { id: "6", date: "2026-02-24", workOrder: "WO-2026-0055", cutQty: 250, fabricConsumed: 410, plannedConsumption: 400, wastagePercent: 2.5, bundles: 10, enteredBy: "Anand S." },
-  { id: "7", date: "2026-02-23", workOrder: "WO-2026-0051", cutQty: 500, fabricConsumed: 680, plannedConsumption: 660, wastagePercent: 3.0, bundles: 20, enteredBy: "Meena P." },
-];
-
-const WORK_ORDERS = [
-  "WO-2026-0051",
-  "WO-2026-0052",
-  "WO-2026-0053",
-  "WO-2026-0054",
-  "WO-2026-0055",
-  "WO-2026-0056",
-  "WO-2026-0057",
-  "WO-2026-0058",
-];
+type WOOption = {
+  id: string;
+  wo_number: string;
+  product_name: string;
+  total_quantity: number;
+};
 
 // ---------------------------------------------------------------------------
 // Columns
@@ -128,12 +121,18 @@ const columns: ColumnDef<CuttingEntry>[] = [
 // ---------------------------------------------------------------------------
 
 export default function CuttingPage() {
-  const [entries, setEntries] = React.useState(DEMO_ENTRIES);
+  const { companyId, userId } = useCompany();
+  const [entries, setEntries] = React.useState<CuttingEntry[]>([]);
+  const [loading, setLoading] = React.useState(true);
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
+  // Dropdown data
+  const [workOrderOptions, setWorkOrderOptions] = React.useState<WOOption[]>([]);
+
   const [form, setForm] = React.useState({
-    workOrder: "",
+    workOrderId: "",
+    workOrderLabel: "",
     date: new Date().toISOString().split("T")[0],
     fabricConsumed: "",
     plannedConsumption: "",
@@ -149,39 +148,102 @@ export default function CuttingPage() {
       ? Math.round(((fabricConsumed - plannedConsumption) / plannedConsumption) * 100 * 10) / 10
       : 0;
 
+  const fetchEntries = React.useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await getCuttingEntries(companyId);
+    if (error) {
+      toast.error("Failed to load cutting entries: " + error);
+    } else if (data) {
+      const mapped: CuttingEntry[] = data.map((entry: Record<string, unknown>) => {
+        const wo = entry.work_orders as Record<string, unknown> | null;
+        const profile = entry.profiles as Record<string, unknown> | null;
+        return {
+          id: entry.id as string,
+          date: entry.entry_date as string,
+          workOrder: wo?.wo_number as string ?? "-",
+          workOrderId: entry.work_order_id as string,
+          cutQty: (entry.total_cut_qty as number) || 0,
+          fabricConsumed: Number(entry.fabric_consumed) || 0,
+          plannedConsumption: Number(entry.planned_consumption) || 0,
+          wastagePercent: Number(entry.wastage_percent) || 0,
+          bundles: (entry.bundles_created as number) || 0,
+          enteredBy: (profile?.full_name as string) || "-",
+        };
+      });
+      setEntries(mapped);
+    }
+    setLoading(false);
+  }, [companyId]);
+
+  const fetchDropdownData = React.useCallback(async () => {
+    const { data } = await getWorkOrdersForDropdown(companyId);
+    if (data) {
+      setWorkOrderOptions(data as WOOption[]);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchEntries();
+    fetchDropdownData();
+  }, [fetchEntries, fetchDropdownData]);
+
   const handleSave = async () => {
-    if (!form.workOrder || !form.totalCutQty) {
+    if (!form.workOrderId || !form.totalCutQty) {
       toast.error("Please fill work order and cut quantity.");
       return;
     }
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
 
-    const newEntry: CuttingEntry = {
-      id: String(Date.now()),
-      date: form.date,
-      workOrder: form.workOrder,
-      cutQty: parseInt(form.totalCutQty) || 0,
-      fabricConsumed,
-      plannedConsumption,
-      wastagePercent: Math.max(0, wastagePercent),
-      bundles: parseInt(form.bundles) || 0,
-      enteredBy: "Current User",
-    };
+    // Parse size breakdown if provided
+    let sizeBreakdown = {};
+    if (form.sizeBreakdown.trim()) {
+      try {
+        const pairs = form.sizeBreakdown.split(",").map((p) => p.trim());
+        sizeBreakdown = Object.fromEntries(
+          pairs.map((p) => {
+            const [size, qty] = p.split(":").map((s) => s.trim());
+            return [size, parseInt(qty) || 0];
+          })
+        );
+      } catch {
+        // Ignore parse errors, use empty object
+      }
+    }
 
-    setEntries((prev) => [newEntry, ...prev]);
-    setSaving(false);
-    setSheetOpen(false);
-    setForm({
-      workOrder: "",
-      date: new Date().toISOString().split("T")[0],
-      fabricConsumed: "",
-      plannedConsumption: "",
-      totalCutQty: "",
-      bundles: "",
-      sizeBreakdown: "",
+    const { error } = await createCuttingEntry({
+      company_id: companyId,
+      work_order_id: form.workOrderId,
+      entry_date: form.date,
+      marker_length: null,
+      marker_efficiency: null,
+      layers: null,
+      fabric_rolls_used: null,
+      fabric_consumed: fabricConsumed,
+      planned_consumption: plannedConsumption > 0 ? plannedConsumption : null,
+      total_cut_qty: parseInt(form.totalCutQty) || 0,
+      bundles_created: parseInt(form.bundles) || 0,
+      size_breakdown: sizeBreakdown,
+      entered_by: userId,
     });
-    toast.success("Cutting entry saved.");
+
+    if (error) {
+      toast.error("Failed to save cutting entry: " + error);
+    } else {
+      toast.success("Cutting entry saved.");
+      setSheetOpen(false);
+      setForm({
+        workOrderId: "",
+        workOrderLabel: "",
+        date: new Date().toISOString().split("T")[0],
+        fabricConsumed: "",
+        plannedConsumption: "",
+        totalCutQty: "",
+        bundles: "",
+        sizeBreakdown: "",
+      });
+      fetchEntries();
+    }
+    setSaving(false);
   };
 
   return (
@@ -198,6 +260,7 @@ export default function CuttingPage() {
       <DataTable
         columns={columns}
         data={entries}
+        loading={loading}
         searchKey="workOrder"
         searchPlaceholder="Search by work order..."
         actions={
@@ -223,18 +286,23 @@ export default function CuttingPage() {
               Work Order <span className="text-red-500">*</span>
             </Label>
             <Select
-              value={form.workOrder}
-              onValueChange={(v) =>
-                setForm((prev) => ({ ...prev, workOrder: v }))
-              }
+              value={form.workOrderId}
+              onValueChange={(v) => {
+                const wo = workOrderOptions.find((w) => w.id === v);
+                setForm((prev) => ({
+                  ...prev,
+                  workOrderId: v,
+                  workOrderLabel: wo?.wo_number || "",
+                }));
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select work order..." />
               </SelectTrigger>
               <SelectContent>
-                {WORK_ORDERS.map((wo) => (
-                  <SelectItem key={wo} value={wo}>
-                    {wo}
+                {workOrderOptions.map((wo) => (
+                  <SelectItem key={wo.id} value={wo.id}>
+                    {wo.wo_number} - {wo.product_name}
                   </SelectItem>
                 ))}
               </SelectContent>

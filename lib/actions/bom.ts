@@ -106,8 +106,8 @@ export async function createBOM(bomData: CreateBOMData) {
   // Calculate item amounts and total cost
   const itemsWithAmounts = items.map((item) => {
     const effectiveQty =
-      item.quantity_per_piece * (1 + (item.wastage_percent ?? 0) / 100);
-    const amount = effectiveQty * item.rate;
+      (item.quantity_per_piece ?? 0) * (1 + (item.wastage_percent ?? 0) / 100);
+    const amount = effectiveQty * (item.rate ?? 0);
     return { ...item, amount };
   });
 
@@ -155,8 +155,8 @@ export async function updateBOM(
   // Recalculate cost
   const itemsWithAmounts = items.map((item) => {
     const effectiveQty =
-      item.quantity_per_piece * (1 + (item.wastage_percent ?? 0) / 100);
-    const amount = effectiveQty * item.rate;
+      (item.quantity_per_piece ?? 0) * (1 + (item.wastage_percent ?? 0) / 100);
+    const amount = effectiveQty * (item.rate ?? 0);
     return { ...item, amount };
   });
 

@@ -12,6 +12,7 @@ import {
   Filter,
   Download,
   Wrench,
+  Loader2,
 } from "lucide-react";
 import {
   BarChart,
@@ -23,8 +24,11 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { useCompany } from "@/contexts/company-context";
+import { getMachines, schedulePM } from "@/lib/actions/maintenance";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +50,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 type PMStatus = "done" | "due" | "overdue" | "scheduled";
@@ -55,6 +59,7 @@ type PMFrequency = "weekly" | "monthly" | "quarterly" | "annual";
 
 interface PMTask {
   id: string;
+  machineId: string;
   machineCode: string;
   machineName: string;
   department: string;
@@ -68,297 +73,12 @@ interface PMTask {
   notes: string;
 }
 
-const MOCK_PM_TASKS: PMTask[] = [
-  {
-    id: "PM-001",
-    machineCode: "SEW-001",
-    machineName: "Brother Lock Stitch",
-    department: "Sewing",
-    pmType: "oiling",
-    frequency: "weekly",
-    lastDone: "19 Feb 2026",
-    nextDue: "26 Feb 2026",
-    status: "due",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 0.5,
-    notes: "Oil needle bar, presser foot assembly, hook assembly",
-  },
-  {
-    id: "PM-002",
-    machineCode: "SEW-003",
-    machineName: "Pegasus Overlock",
-    department: "Sewing",
-    pmType: "calibration",
-    frequency: "monthly",
-    lastDone: "10 Jan 2026",
-    nextDue: "10 Feb 2026",
-    status: "overdue",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 1.5,
-    notes: "Thread tension calibration and needle plate alignment",
-  },
-  {
-    id: "PM-003",
-    machineCode: "CUT-001",
-    machineName: "Eastman Straight Knife",
-    department: "Cutting",
-    pmType: "belt_change",
-    frequency: "quarterly",
-    lastDone: "10 Nov 2025",
-    nextDue: "10 Feb 2026",
-    status: "overdue",
-    assignedTo: "Dinesh Kumar",
-    estimatedHours: 2.0,
-    notes: "Replace drive belt and blade guard",
-  },
-  {
-    id: "PM-004",
-    machineCode: "CUT-002",
-    machineName: "Gerber Auto Cutter",
-    department: "Cutting",
-    pmType: "full_service",
-    frequency: "quarterly",
-    lastDone: "05 Aug 2025",
-    nextDue: "05 Nov 2025",
-    status: "overdue",
-    assignedTo: "External Vendor",
-    estimatedHours: 8.0,
-    notes: "Full service by Gerber certified technician required",
-  },
-  {
-    id: "PM-005",
-    machineCode: "DYE-001",
-    machineName: "Winch Dyeing Machine",
-    department: "Dyeing",
-    pmType: "lubrication",
-    frequency: "monthly",
-    lastDone: "20 Jan 2026",
-    nextDue: "20 Feb 2026",
-    status: "overdue",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 1.0,
-    notes: "Lubricate winch shaft bearings and drive chain",
-  },
-  {
-    id: "PM-006",
-    machineCode: "DYE-003",
-    machineName: "Hydro Extractor",
-    department: "Dyeing",
-    pmType: "calibration",
-    frequency: "monthly",
-    lastDone: "01 Jan 2026",
-    nextDue: "01 Feb 2026",
-    status: "overdue",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 2.0,
-    notes: "Balance check and vibration analysis",
-  },
-  {
-    id: "PM-007",
-    machineCode: "FIN-001",
-    machineName: "Hoffman Steam Press",
-    department: "Finishing",
-    pmType: "oiling",
-    frequency: "weekly",
-    lastDone: "19 Feb 2026",
-    nextDue: "26 Feb 2026",
-    status: "due",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 0.5,
-    notes: "Oil pressing head arm and foot pedal mechanism",
-  },
-  {
-    id: "PM-008",
-    machineCode: "FIN-002",
-    machineName: "Boiler Unit A",
-    department: "Finishing",
-    pmType: "full_service",
-    frequency: "annual",
-    lastDone: "01 Feb 2025",
-    nextDue: "01 Feb 2026",
-    status: "overdue",
-    assignedTo: "External Vendor",
-    estimatedHours: 16.0,
-    notes: "IBR statutory inspection + full service by Thermax",
-  },
-  {
-    id: "PM-009",
-    machineCode: "UTL-001",
-    machineName: "Air Compressor A",
-    department: "Maintenance",
-    pmType: "filter_change",
-    frequency: "monthly",
-    lastDone: "15 Jan 2026",
-    nextDue: "15 Feb 2026",
-    status: "overdue",
-    assignedTo: "Dinesh Kumar",
-    estimatedHours: 0.5,
-    notes: "Air filter, oil filter and separator element change",
-  },
-  {
-    id: "PM-010",
-    machineCode: "SEW-006",
-    machineName: "Juki Flat Seamer",
-    department: "Sewing",
-    pmType: "oiling",
-    frequency: "weekly",
-    lastDone: "19 Feb 2026",
-    nextDue: "26 Feb 2026",
-    status: "due",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 0.5,
-    notes: "Lubricate all moving parts",
-  },
-  {
-    id: "PM-011",
-    machineCode: "DYE-002",
-    machineName: "Jet Dyeing Machine",
-    department: "Dyeing",
-    pmType: "lubrication",
-    frequency: "monthly",
-    lastDone: "18 Jan 2026",
-    nextDue: "18 Feb 2026",
-    status: "overdue",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 1.5,
-    notes: "Seal inspection and pump lubrication",
-  },
-  {
-    id: "PM-012",
-    machineCode: "CUT-003",
-    machineName: "Fusing Machine",
-    department: "Cutting",
-    pmType: "calibration",
-    frequency: "monthly",
-    lastDone: "14 Jan 2026",
-    nextDue: "14 Mar 2026",
-    status: "scheduled",
-    assignedTo: "Dinesh Kumar",
-    estimatedHours: 1.0,
-    notes: "Temperature calibration for fusing belt",
-  },
-  {
-    id: "PM-013",
-    machineCode: "SEW-008",
-    machineName: "Juki DDL-9000",
-    department: "Sewing",
-    pmType: "oiling",
-    frequency: "weekly",
-    lastDone: "26 Feb 2026",
-    nextDue: "05 Mar 2026",
-    status: "done",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 0.5,
-    notes: "Weekly lubrication completed",
-  },
-  {
-    id: "PM-014",
-    machineCode: "DYE-004",
-    machineName: "Stenter Frame",
-    department: "Dyeing",
-    pmType: "belt_change",
-    frequency: "quarterly",
-    lastDone: "10 Nov 2025",
-    nextDue: "10 May 2026",
-    status: "scheduled",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 4.0,
-    notes: "Chain and pin replacement on stenter",
-  },
-  {
-    id: "PM-015",
-    machineCode: "UTL-003",
-    machineName: "Generator Set",
-    department: "Maintenance",
-    pmType: "full_service",
-    frequency: "quarterly",
-    lastDone: "01 Nov 2025",
-    nextDue: "01 Mar 2026",
-    status: "due",
-    assignedTo: "Dinesh Kumar",
-    estimatedHours: 4.0,
-    notes: "Oil change, air/fuel filter change, battery check",
-  },
-  {
-    id: "PM-016",
-    machineCode: "SEW-009",
-    machineName: "Juki MO-6714",
-    department: "Sewing",
-    pmType: "oiling",
-    frequency: "weekly",
-    lastDone: "26 Feb 2026",
-    nextDue: "05 Mar 2026",
-    status: "done",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 0.5,
-    notes: "Weekly lubrication completed",
-  },
-  {
-    id: "PM-017",
-    machineCode: "FIN-003",
-    machineName: "Tunnel Finisher",
-    department: "Finishing",
-    pmType: "filter_change",
-    frequency: "monthly",
-    lastDone: "10 Jan 2026",
-    nextDue: "10 Mar 2026",
-    status: "scheduled",
-    assignedTo: "Muthukumar Raja",
-    estimatedHours: 1.0,
-    notes: "Air and condensate filter replacement",
-  },
-  {
-    id: "PM-018",
-    machineCode: "UTL-004",
-    machineName: "Water Softener",
-    department: "Maintenance",
-    pmType: "full_service",
-    frequency: "quarterly",
-    lastDone: "10 Oct 2025",
-    nextDue: "10 Apr 2026",
-    status: "scheduled",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 2.0,
-    notes: "Salt replenishment and resin cleaning",
-  },
-  {
-    id: "PM-019",
-    machineCode: "SEW-010",
-    machineName: "Brother B945",
-    department: "Sewing",
-    pmType: "calibration",
-    frequency: "quarterly",
-    lastDone: "08 Nov 2025",
-    nextDue: "08 Mar 2026",
-    status: "due",
-    assignedTo: "Siva Subramaniam",
-    estimatedHours: 1.5,
-    notes: "Buttonhole size and stitch density calibration",
-  },
-  {
-    id: "PM-020",
-    machineCode: "DYE-005",
-    machineName: "Drum Tumble Dryer",
-    department: "Dyeing",
-    pmType: "belt_change",
-    frequency: "annual",
-    lastDone: "05 Jan 2025",
-    nextDue: "05 Apr 2026",
-    status: "scheduled",
-    assignedTo: "External Vendor",
-    estimatedHours: 3.0,
-    notes: "Drum drive belt and bearing replacement",
-  },
-];
-
-const PM_COMPLIANCE_DATA = [
-  { month: "Sep 25", planned: 18, completed: 15, pct: 83 },
-  { month: "Oct 25", planned: 20, completed: 17, pct: 85 },
-  { month: "Nov 25", planned: 19, completed: 14, pct: 74 },
-  { month: "Dec 25", planned: 16, completed: 13, pct: 81 },
-  { month: "Jan 26", planned: 20, completed: 16, pct: 80 },
-  { month: "Feb 26", planned: 20, completed: 7, pct: 35 },
-];
+interface MachineOption {
+  id: string;
+  code: string;
+  name: string;
+  department: string;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -410,6 +130,39 @@ const FREQ_BADGE: Record<PMFrequency, string> = {
   annual: "bg-gray-100 text-gray-700 border-gray-300",
 };
 
+function derivePMStatus(nextDue: string | null, lastServiced: string | null): PMStatus {
+  if (!nextDue) return "scheduled";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDate = new Date(nextDue);
+  dueDate.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  // If last serviced is after or equal to the due date, it's done
+  if (lastServiced) {
+    const lastDate = new Date(lastServiced);
+    lastDate.setHours(0, 0, 0, 0);
+    if (lastDate >= dueDate) return "done";
+  }
+
+  if (diffDays < 0) return "overdue";
+  if (diffDays <= 7) return "due";
+  return "scheduled";
+}
+
+function derivePMFrequency(lastServiced: string | null, nextDue: string | null): PMFrequency {
+  if (!lastServiced || !nextDue) return "monthly";
+  const last = new Date(lastServiced);
+  const next = new Date(nextDue);
+  const diffDays = Math.floor((next.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 10) return "weekly";
+  if (diffDays <= 45) return "monthly";
+  if (diffDays <= 120) return "quarterly";
+  return "annual";
+}
+
 // ---------------------------------------------------------------------------
 // Add PM Task Dialog
 // ---------------------------------------------------------------------------
@@ -417,28 +170,54 @@ const FREQ_BADGE: Record<PMFrequency, string> = {
 function AddPMDialog({
   open,
   onClose,
+  machines,
+  companyId,
+  onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
+  machines: MachineOption[];
+  companyId: string;
+  onSuccess: () => void;
 }) {
-  const [machineCode, setMachineCode] = React.useState("");
+  const [selectedMachineId, setSelectedMachineId] = React.useState("");
   const [pmType, setPmType] = React.useState<PMType>("oiling");
   const [frequency, setFrequency] = React.useState<PMFrequency>("monthly");
   const [scheduledDate, setScheduledDate] = React.useState("");
-  const [assignedTo, setAssignedTo] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
 
-  const ENGINEERS = [
-    "Muthukumar Raja",
-    "Dinesh Kumar",
-    "Siva Subramaniam",
-    "Rajesh Pillai",
-    "External Vendor",
-  ];
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production: call schedulePM server action
-    console.log("Scheduling PM", { machineCode, pmType, frequency, scheduledDate, assignedTo });
+    if (!selectedMachineId) {
+      toast.error("Please select a machine");
+      return;
+    }
+    if (!scheduledDate) {
+      toast.error("Scheduled date is required");
+      return;
+    }
+
+    setSaving(true);
+    const { error } = await schedulePM({
+      machine_id: selectedMachineId,
+      company_id: companyId,
+      pm_type: pmType as "oiling" | "belt_change" | "calibration" | "full_service",
+      frequency: frequency as "weekly" | "monthly" | "quarterly" | "annual",
+      scheduled_date: scheduledDate,
+    });
+    setSaving(false);
+
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    toast.success("PM task scheduled successfully");
+    setSelectedMachineId("");
+    setScheduledDate("");
+    setPmType("oiling");
+    setFrequency("monthly");
+    onSuccess();
     onClose();
   };
 
@@ -450,13 +229,19 @@ function AddPMDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-sm">Machine Code *</Label>
-            <Input
-              placeholder="e.g. SEW-001"
-              value={machineCode}
-              onChange={(e) => setMachineCode(e.target.value)}
-              required
-            />
+            <Label className="text-sm">Machine *</Label>
+            <Select value={selectedMachineId} onValueChange={setSelectedMachineId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a machine..." />
+              </SelectTrigger>
+              <SelectContent>
+                {machines.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.code} - {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -492,39 +277,22 @@ function AddPMDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Scheduled Date *</Label>
-              <Input
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">Assign To</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {ENGINEERS.map((eng) => (
-                    <SelectItem key={eng} value={eng}>
-                      {eng}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm">Scheduled Date *</Label>
+            <Input
+              type="date"
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+              required
+            />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!machineCode || !scheduledDate}>
-              Add PM Task
+            <Button type="submit" disabled={!selectedMachineId || !scheduledDate || saving}>
+              {saving ? "Scheduling..." : "Add PM Task"}
             </Button>
           </DialogFooter>
         </form>
@@ -538,27 +306,112 @@ function AddPMDialog({
 // ---------------------------------------------------------------------------
 
 export default function PMSchedulePage() {
+  const { companyId } = useCompany();
+
+  const [pmTasks, setPmTasks] = React.useState<PMTask[]>([]);
+  const [machineOptions, setMachineOptions] = React.useState<MachineOption[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
   const [filterStatus, setFilterStatus] = React.useState("all");
   const [filterDept, setFilterDept] = React.useState("all");
   const [filterPMType, setFilterPMType] = React.useState("all");
   const [viewMode, setViewMode] = React.useState<"table" | "chart">("table");
   const [showAddDialog, setShowAddDialog] = React.useState(false);
 
-  const overdueCount = MOCK_PM_TASKS.filter((t) => t.status === "overdue").length;
-  const dueCount = MOCK_PM_TASKS.filter((t) => t.status === "due").length;
-  const doneCount = MOCK_PM_TASKS.filter((t) => t.status === "done").length;
-  const scheduledCount = MOCK_PM_TASKS.filter((t) => t.status === "scheduled").length;
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await getMachines(companyId);
 
-  const latestCompliance = PM_COMPLIANCE_DATA[PM_COMPLIANCE_DATA.length - 1].pct;
+    if (error) {
+      toast.error(error);
+      setLoading(false);
+      return;
+    }
 
-  const filteredTasks = MOCK_PM_TASKS.filter((task) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawMachines = (data ?? []) as any[];
+
+    // Build machine options for the Add PM dialog
+    const options: MachineOption[] = rawMachines.map((m) => ({
+      id: m.id,
+      code: m.machine_code ?? "",
+      name: m.name ?? "",
+      department: m.department ?? "",
+    }));
+    setMachineOptions(options);
+
+    // Derive PM tasks from machines that have next_service_due set
+    const tasks: PMTask[] = rawMachines
+      .filter((m) => m.next_service_due)
+      .map((m) => {
+        const lastServiced = m.last_serviced_at ?? null;
+        const nextDue = m.next_service_due ?? null;
+        const status = derivePMStatus(nextDue, lastServiced);
+        const frequency = derivePMFrequency(lastServiced, nextDue);
+
+        return {
+          id: m.id,
+          machineId: m.id,
+          machineCode: m.machine_code ?? "",
+          machineName: m.name ?? "",
+          department: m.department ?? "",
+          pmType: "full_service" as PMType,
+          frequency,
+          lastDone: lastServiced ?? "—",
+          nextDue: nextDue ?? "—",
+          status,
+          assignedTo: "—",
+          estimatedHours: frequency === "weekly" ? 0.5 : frequency === "monthly" ? 1.5 : frequency === "quarterly" ? 4 : 8,
+          notes: `${m.make ?? ""} ${m.model ?? ""}`.trim() || "—",
+        };
+      })
+      // Sort: overdue first, then due, then scheduled, then done
+      .sort((a, b) => {
+        const order: Record<PMStatus, number> = { overdue: 0, due: 1, scheduled: 2, done: 3 };
+        return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+      });
+
+    setPmTasks(tasks);
+    setLoading(false);
+  }, [companyId]);
+
+  React.useEffect(() => {
+    if (companyId) {
+      fetchData();
+    }
+  }, [companyId, fetchData]);
+
+  const overdueCount = pmTasks.filter((t) => t.status === "overdue").length;
+  const dueCount = pmTasks.filter((t) => t.status === "due").length;
+  const doneCount = pmTasks.filter((t) => t.status === "done").length;
+  const scheduledCount = pmTasks.filter((t) => t.status === "scheduled").length;
+
+  const totalTasks = pmTasks.length;
+  const latestCompliance = totalTasks > 0 ? Math.round((doneCount / totalTasks) * 100) : 0;
+
+  const filteredTasks = pmTasks.filter((task) => {
     if (filterStatus !== "all" && task.status !== filterStatus) return false;
     if (filterDept !== "all" && task.department !== filterDept) return false;
     if (filterPMType !== "all" && task.pmType !== filterPMType) return false;
     return true;
   });
 
-  const DEPARTMENTS = ["all", "Sewing", "Cutting", "Finishing", "Dyeing", "Maintenance"];
+  // Build unique departments from data
+  const uniqueDepts = Array.from(new Set(pmTasks.map((t) => t.department))).sort();
+  const DEPARTMENTS = ["all", ...uniqueDepts];
+
+  // PM compliance data: derive a simple summary
+  const PM_COMPLIANCE_DATA = [
+    { month: "Current", planned: totalTasks, completed: doneCount, pct: latestCompliance },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -602,11 +455,11 @@ export default function PMSchedulePage() {
             sub: "Scheduled for this week",
           },
           {
-            label: "Completed (MTD)",
+            label: "Completed",
             value: doneCount,
             icon: CheckCircle2,
             iconBg: "bg-green-600",
-            sub: "This month",
+            sub: "Service up to date",
           },
           {
             label: "Upcoming",
@@ -643,9 +496,9 @@ export default function PMSchedulePage() {
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">PM Compliance Rate - Last 6 Months</CardTitle>
+              <CardTitle className="text-base">PM Compliance Summary</CardTitle>
               <div className="text-right">
-                <p className="text-xs text-gray-400">Current Month</p>
+                <p className="text-xs text-gray-400">Compliance Rate</p>
                 <p
                   className={cn(
                     "text-lg font-black tabular-nums",
@@ -666,13 +519,12 @@ export default function PMSchedulePage() {
               <BarChart data={PM_COMPLIANCE_DATA} barSize={30}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                <YAxis tick={{ fontSize: 12 }} domain={[0, Math.max(totalTasks, 1)]} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(val: number, name: string): any => [
-                    name === "pct" ? `${val}%` : val,
-                    name === "pct" ? "Compliance" : name === "planned" ? "Planned" : "Completed",
+                  formatter={(val, name) => [
+                    val,
+                    name === "planned" ? "Planned" : "Completed",
                   ]}
                 />
                 <Bar dataKey="planned" fill="#e5e7eb" radius={[4, 4, 0, 0]} name="Planned" />
@@ -695,33 +547,43 @@ export default function PMSchedulePage() {
           </CardContent>
         </Card>
 
-        {/* PM type breakdown */}
+        {/* Status breakdown */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Tasks by Type</CardTitle>
+            <CardTitle className="text-base">Tasks by Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(Object.keys(PM_TYPE_LABELS) as PMType[]).map((type) => {
-              const count = MOCK_PM_TASKS.filter((t) => t.pmType === type).length;
-              const total = MOCK_PM_TASKS.length;
-              const pct = Math.round((count / total) * 100);
-              return (
-                <div key={type} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">{PM_TYPE_LABELS[type]}</span>
-                    <span className="font-semibold text-gray-800">
-                      {count} ({pct}%)
-                    </span>
+            {(Object.entries(STATUS_CONFIG) as [PMStatus, typeof STATUS_CONFIG[PMStatus]][]).map(
+              ([statusKey, cfg]) => {
+                const count = pmTasks.filter((t) => t.status === statusKey).length;
+                const pct = totalTasks > 0 ? Math.round((count / totalTasks) * 100) : 0;
+                return (
+                  <div key={statusKey} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-600">{cfg.label}</span>
+                      <span className="font-semibold text-gray-800">
+                        {count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-gray-100">
+                      <div
+                        className={cn(
+                          "h-1.5 rounded-full",
+                          statusKey === "overdue"
+                            ? "bg-red-500"
+                            : statusKey === "due"
+                            ? "bg-amber-500"
+                            : statusKey === "done"
+                            ? "bg-green-500"
+                            : "bg-blue-500"
+                        )}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-gray-100">
-                    <div
-                      className="h-1.5 rounded-full bg-blue-500"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </CardContent>
         </Card>
       </div>
@@ -810,14 +672,12 @@ export default function PMSchedulePage() {
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
                   {[
-                    "ID",
                     "Machine",
                     "Department",
                     "PM Type",
                     "Frequency",
                     "Last Done",
                     "Next Due",
-                    "Assigned To",
                     "Est. Hours",
                     "Status",
                   ].map((h) => (
@@ -844,11 +704,6 @@ export default function PMSchedulePage() {
                       )}
                     >
                       <td className="px-4 py-3">
-                        <span className="font-mono text-xs font-semibold text-blue-600">
-                          {task.id}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
                         <p className="text-sm font-medium text-gray-900 whitespace-nowrap">
                           {task.machineCode}
                         </p>
@@ -863,7 +718,7 @@ export default function PMSchedulePage() {
                         <div className="flex items-center gap-1.5">
                           <Wrench className="h-3 w-3 text-gray-400 shrink-0" />
                           <span className="text-sm text-gray-700 whitespace-nowrap">
-                            {PM_TYPE_LABELS[task.pmType]}
+                            {PM_TYPE_LABELS[task.pmType] ?? task.pmType}
                           </span>
                         </div>
                       </td>
@@ -893,9 +748,6 @@ export default function PMSchedulePage() {
                         >
                           {task.nextDue}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                        {task.assignedTo}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 text-center tabular-nums">
                         {task.estimatedHours}h
@@ -947,6 +799,9 @@ export default function PMSchedulePage() {
       <AddPMDialog
         open={showAddDialog}
         onClose={() => setShowAddDialog(false)}
+        machines={machineOptions}
+        companyId={companyId}
+        onSuccess={fetchData}
       />
     </div>
   );
