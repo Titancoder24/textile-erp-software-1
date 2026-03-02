@@ -474,4 +474,157 @@ export const NAV_ITEMS = [
     href: "/settings",
     roles: [ROLES.SUPER_ADMIN, ROLES.FACTORY_OWNER, ROLES.GENERAL_MANAGER],
   },
+  // ============================================================
+  // ADVANCED ANALYTICS & INTELLIGENCE FEATURES
+  // ============================================================
+  {
+    title: "Profitability Heatmap",
+    href: "/finance/profitability-heatmap",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.FINANCE_MANAGER,
+    ],
+  },
+  {
+    title: "Attendance Impact",
+    href: "/production/attendance-impact",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+      ROLES.HR_MANAGER,
+    ],
+  },
+  {
+    title: "Fabric Variance",
+    href: "/production/fabric-variance",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.STORE_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+      ROLES.FINANCE_MANAGER,
+    ],
+  },
+  {
+    title: "Delivery Countdown",
+    href: "/purchase/delivery-countdown",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PURCHASE_MANAGER,
+      ROLES.MERCHANDISER,
+    ],
+  },
+  {
+    title: "Rework Cost",
+    href: "/quality/rework-cost",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.QUALITY_MANAGER,
+      ROLES.FINANCE_MANAGER,
+    ],
+  },
+  {
+    title: "Style Library",
+    href: "/style-library",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.MERCHANDISER,
+      ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Exception Feed",
+    href: "/production/exceptions",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Buyer Insights",
+    href: "/buyer-insights",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.MERCHANDISER,
+    ],
+  },
+  {
+    title: "Expiry Tracker",
+    href: "/inventory/expiry-tracker",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.STORE_MANAGER,
+      ROLES.DYEING_MASTER,
+    ],
+  },
+  {
+    title: "Handoff Tracker",
+    href: "/production/handoffs",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+      ROLES.SEWING_SUPERVISOR,
+    ],
+  },
+  {
+    title: "Capacity Calendar",
+    href: "/capacity/calendar",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+      ROLES.MERCHANDISER,
+    ],
+  },
+  {
+    title: "Cost Benchmark",
+    href: "/finance/cost-benchmark",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.FINANCE_MANAGER,
+      ROLES.PRODUCTION_MANAGER,
+    ],
+  },
+  {
+    title: "Quality Gate",
+    href: "/shipment/quality-gate",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+      ROLES.QUALITY_MANAGER,
+      ROLES.MERCHANDISER,
+    ],
+  },
+  {
+    title: "Weekly Digest",
+    href: "/reports/weekly-digest",
+    roles: [
+      ROLES.SUPER_ADMIN,
+      ROLES.FACTORY_OWNER,
+      ROLES.GENERAL_MANAGER,
+    ],
+  },
 ];

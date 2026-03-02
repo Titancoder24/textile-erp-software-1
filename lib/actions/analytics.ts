@@ -1118,7 +1118,7 @@ export async function getMaterialExpiryData(companyId: string) {
   const { data: inventory, error: invError } = await supabase
     .from("inventory")
     .select(`
-      id, item_name, item_type, batch_number, quantity, uom, rate, status,
+      id, item_id, item_name, item_type, batch_number, quantity, uom, rate, status, created_at,
       locations:warehouse_id ( name )
     `)
     .eq("company_id", companyId)
@@ -1240,15 +1240,19 @@ export async function getHandoffTrackerData(companyId: string) {
 
   const woIds = (workOrders ?? []).map((wo) => wo.id);
 
-  const [
-    { data: cuttingEntries },
-    { data: productionEntries },
-    { data: finishingEntries },
-  ] = await Promise.all([
+  if (woIds.length === 0) {
+    return { data: { handoffs: [], summary: { avgWaitMinutes: 0, totalIdleHours: 0, worstHandoff: "N/A", handoffsByRoute: [] } }, error: null };
+  }
+
+  const [cutResult, prodResult, finResult] = await Promise.all([
     supabase.from("cutting_entries").select("work_order_id, entry_date, total_cut_qty, created_at").in("work_order_id", woIds),
     supabase.from("production_entries").select("work_order_id, entry_date, produced_quantity, created_at, production_line").in("work_order_id", woIds),
     supabase.from("finishing_entries").select("work_order_id, entry_date, received_from_sewing, processed_quantity, created_at").in("work_order_id", woIds),
   ]);
+
+  const cuttingEntries = cutResult.data;
+  const productionEntries = prodResult.data;
+  const finishingEntries = finResult.data as Array<{ work_order_id: string; entry_date: string; received_from_sewing: number; processed_quantity: number; created_at: string }> | null;
 
   const handoffs: HandoffEntry[] = [];
 
@@ -1385,7 +1389,7 @@ export async function getCapacityCalendarData(companyId: string, weeksAhead: num
   const { data: workOrders } = await supabase
     .from("work_orders")
     .select(`
-      id, production_line, total_quantity, good_output, planned_start_date, planned_end_date, status,
+      id, product_name, production_line, total_quantity, good_output, planned_start_date, planned_end_date, status,
       sales_orders ( id, order_number, product_name, buyer_id, buyers ( name ) )
     `)
     .eq("company_id", companyId)
